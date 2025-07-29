@@ -166,7 +166,11 @@ def create_gradio_interface(checkpoint_dir, output_dir):
             env["TORCH_CUDNN_V8_API_ENABLED"] = "1"  # Enable cuDNN v8 for H100
             env["NVIDIA_TF32_OVERRIDE"] = "1"  # Enable TF32 for faster computation
 
-            result = subprocess.run(cmd_args, capture_output=True, text=True, cwd=wan2_1_dir, env=env)
+            result = subprocess.run(
+                cmd_args,
+                stdout=sys.stdout,     
+                stderr=sys.stderr,
+            )
 
             # Always log the output for debugging
             print(f"generate.py stdout: {result.stdout}")

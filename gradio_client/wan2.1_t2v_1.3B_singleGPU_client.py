@@ -17,6 +17,7 @@ import json
 import os
 import sys
 import time
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -312,8 +313,8 @@ class Wan2_1Client:
             # The Gradio app expects: [prompt, negative_prompt, input_text, api_token]
             data = {"data": [prompt, negative_prompt, json.dumps(mapped_parameters), self.api_token]}
 
-            # Make the request to the correct endpoint - gr.Interface with api_open=True uses /api/predict/
-            endpoint_path = "/api/predict/"
+            # Make the request to the correct endpoint - use /gradio_api/ prefix
+            endpoint_path = "/gradio_api/predict/"
             print(f"🔄 Making direct HTTP request to: {self.endpoint_url}{endpoint_path}")
             print(f"📤 Request data: {data}")
             response = requests.post(f"{self.endpoint_url}{endpoint_path}", json=data, headers=headers, timeout=300)
@@ -324,12 +325,14 @@ class Wan2_1Client:
                 # The Gradio app returns [video_path, status_message]
                 return result.get("data", [None, "No data in response"])
             elif response.status_code == 404:
-                # Try alternative endpoint patterns for gr.Interface with api_open=True
+                # Try alternative endpoint patterns for Gradio API
                 alternative_endpoints = [
+                    "/gradio_api/predict/",
+                    "/gradio_api/run/",
+                    "/gradio_api/predict",
+                    "/gradio_api/run",
                     "/api/predict/",
                     "/api/run/",
-                    "/api/predict",
-                    "/api/run",
                     "/predict",
                     "/run",
                 ]
