@@ -97,9 +97,15 @@ def create_gradio_interface(checkpoint_dir, output_dir):
                 f.write(negative_prompt)
 
             # Build command line arguments for generate.py
+            # Get the Wan2.1 directory path
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            project_root = os.path.dirname(current_dir)
+            wan2_1_dir = os.path.join(project_root, "Wan2.1")
+            generate_py_path = os.path.join(wan2_1_dir, "generate.py")
+            
             cmd_args = [
                 "python",
-                "/mnt/Wan2.1/generate.py",
+                generate_py_path,
                 "--task",
                 "t2v-1.3B",
                 "--prompt",
@@ -153,14 +159,14 @@ def create_gradio_interface(checkpoint_dir, output_dir):
 
             # Run the generation with H100 GPU optimization
             env = os.environ.copy()
-            env["PYTHONPATH"] = "/mnt/Wan2.1"
+            env["PYTHONPATH"] = wan2_1_dir
             env["CUDA_VISIBLE_DEVICES"] = "0"  # Use primary H100 GPU
             env["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:2048"  # Larger chunks for H100
             env["CUDA_LAUNCH_BLOCKING"] = "0"  # Non-blocking CUDA operations
             env["TORCH_CUDNN_V8_API_ENABLED"] = "1"  # Enable cuDNN v8 for H100
             env["NVIDIA_TF32_OVERRIDE"] = "1"  # Enable TF32 for faster computation
 
-            result = subprocess.run(cmd_args, capture_output=True, text=True, cwd="/mnt/Wan2.1", env=env)
+            result = subprocess.run(cmd_args, capture_output=True, text=True, cwd=wan2_1_dir, env=env)
 
             # Always log the output for debugging
             print(f"generate.py stdout: {result.stdout}")
@@ -244,27 +250,57 @@ def create_gradio_interface(checkpoint_dir, output_dir):
 
 
 if __name__ == "__main__":
-    allowed_paths = os.environ.get("GRADIO_ALLOWED_PATHS", "/mnt/vfm/gradio").split(",")
-    save_dir = os.environ.get("GRADIO_SAVE_DIR", "/mnt/vfm/gradio/wan2.1_t2v_1.3B_singleGPU")
+    # Get current directory and construct paths relative to it
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.dirname(current_dir)  # Go up one level to project root
+    
+    # Wan2.1 paths - use relative paths from project root
+    wan2_1_dir = os.path.join(project_root, "Wan2.1")
+    generate_py_path = os.path.join(wan2_1_dir, "generate.py")
+    checkpoint_dir = os.path.join(wan2_1_dir, "Wan2.1-T2V-1.3B")
+    
+    # Environment variables with fallbacks
+    allowed_paths = os.environ.get("GRADIO_ALLOWED_PATHS", project_root).split(",")
+    save_dir = os.environ.get("GRADIO_SAVE_DIR", os.path.join(project_root, "gradio_output"))
 
     server_name = os.environ.get("GRADIO_SERVER_NAME", "0.0.0.0")
     server_port = int(os.environ.get("GRADIO_SERVER_PORT", 8080))
 
-    print(f"Starting Gradio Wan2.1 App - {server_name=} {server_port=} {allowed_paths=} {save_dir=}")
+    print(f"Starting Gradio Wan2.1 App - {server_name=} {server_port=}")
+    print(f"Project root: {project_root}")
+    print(f"Wan2.1 directory: {wan2_1_dir}")
+    print(f"Generate.py path: {generate_py_path}")
+    print(f"Checkpoint directory: {checkpoint_dir}")
+    print(f"Save directory: {save_dir}")
 
     # Check if Wan2.1 code exists
-    if not os.path.exists("/mnt/Wan2.1"):
-        print("Error: Wan2.1 code not found at /mnt/Wan2.1")
-        print("Please ensure the Wan2.1 repository is available at the specified path.")
+    if not os.path.exists(wan2_1_dir):
+        print(f"Error: Wan2.1 code not found at {wan2_1_dir}")
+        print("Please ensure the Wan2.1 repository is available in the project directory.")
+        print("Expected structure:")
+        print(f"  {project_root}/")
+        print(f"  ├── Wan2.1/")
+        print(f"  │   ├── generate.py")
+        print(f"  │   └── Wan2.1-T2V-1.3B/")
+        print(f"  └── gradio_host/")
         sys.exit(1)
 
     # Check if generate.py exists
-    if not os.path.exists("/mnt/Wan2.1/generate.py"):
-        print("Error: generate.py not found in /mnt/Wan2.1")
+    if not os.path.exists(generate_py_path):
+        print(f"Error: generate.py not found at {generate_py_path}")
         print("Please ensure the Wan2.1 repository is properly set up.")
         sys.exit(1)
 
-    interface = create_gradio_interface(checkpoint_dir="/mnt/Wan2.1/Wan2.1-T2V-1.3B", output_dir=save_dir)
+    # Check if checkpoint directory exists
+    if not os.path.exists(checkpoint_dir):
+        print(f"Warning: Checkpoint directory not found at {checkpoint_dir}")
+        print("You may need to download the model checkpoints.")
+        print("Please refer to the Wan2.1 documentation for model setup.")
+
+    # Create output directory if it doesn't exist
+    os.makedirs(save_dir, exist_ok=True)
+
+    interface = create_gradio_interface(checkpoint_dir=checkpoint_dir, output_dir=save_dir)
     interface.launch(
         allowed_paths=allowed_paths,
         server_name=server_name,
