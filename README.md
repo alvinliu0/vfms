@@ -20,6 +20,13 @@ vfms/
 ├── gradio_client/        # CLI client application for API calls
 │   └── wan2.1_t2v_1.3B_singleGPU_client.py
 ├── gradio_output/        # Output directory for generated videos
+├── example/              # Example scripts and usage patterns
+│   ├── scripts/          # Ready-to-use generation scripts
+│   │   └── wan2.1_t2v_1.3B_singleGPU/  # Model-specific directory
+│   │       ├── generate.py
+│   │       ├── prompts_example.txt
+│   │       └── negative_prompts_example.txt
+│   └── README.md         # Example usage documentation
 ├── Wan2.1/              # Wan2.1 model repository (submodule)
 └── README.md            # This file
 ```
@@ -242,25 +249,19 @@ export GRADIO_DEBUG=true
 - **GPU Memory**: Requires significant GPU memory (H100 80GB recommended)
 - **Network Timeout**: Client is configured with 2-hour timeout for long generations
 
-## 📝 License
+## 📝 Example Scripts
 
-This project is licensed under the same license as the Wan2.1 model. Please refer to the Wan2.1 repository for license details.
+For quick start and simple usage, see the `example/` folder:
 
-## 🤝 Contributing
+### Quick Start Script
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
+The `example/scripts/wan2.1_t2v_1.3B_singleGPU/generate.py` script handles CLI arguments for basic inputs and calls the client's `generate_video` or `batch_generate` method for video generation. Supports both single and batch generation modes:
 
-## 📞 Support
+```bash
+# Option 1: Navigate to the model-specific directory
+cd example/scripts/wan2.1_t2v_1.3B_singleGPU
+python generate.py --token "your_token" --endpoint "your_endpoint" --prompt "your prompt"
 
-For issues and questions:
-1. Check the troubleshooting section
-2. Review Wan2.1 documentation
-3. Open an issue on GitHub
-
----
-
-**Note**: This framework is designed for research and development purposes. Please ensure compliance with all applicable laws and regulations when using AI-generated content.
+# Option 2: Run directly from vfms root directory
+python example/scripts/wan2.1_t2v_1.3B_singleGPU/generate.py --token "your_token" --endpoint "your_endpoint" --prompt "your prompt"
+```
