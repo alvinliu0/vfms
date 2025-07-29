@@ -68,6 +68,14 @@ generated/
 *.avi
 *.mov
 *.mkv
+*.webm
+*.gif
+
+# Generated content
+generation_*/
+gradio_output/
+temp_output/
+wan2.1_t2v_1.3B_singleGPU/
 
 # Model files (large files)
 *.pt

@@ -192,13 +192,18 @@ class Wan2_1Client:
                     "use_prompt_extend": False,
                 }
 
-            # Create unique output folder
+            # Create unique output folder with model name
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            output_folder = self.output_dir / f"generation_{timestamp}"
+            model_name = "wan2.1_t2v_1.3B_singleGPU"
+            
+            # Create model-specific output directory
+            model_output_dir = self.output_dir / model_name
+            output_folder = model_output_dir / f"generation_{timestamp}"
             output_folder.mkdir(parents=True, exist_ok=True)
 
             print(f"🎬 Generating video with prompt: '{prompt}'")
             print(f"📁 Output folder: {output_folder}")
+            print(f"🤖 Model: {model_name}")
 
             # Prepare the request
             request_data = {
@@ -206,6 +211,7 @@ class Wan2_1Client:
                 "negative_prompt": negative_prompt,
                 "parameters": json.dumps(parameters),
                 "api_token": self.api_token,
+                "model_name": model_name,
             }
 
             # Save request metadata
@@ -241,38 +247,60 @@ class Wan2_1Client:
                 return None
 
             # Parse the result
+            video_path = None
+            status_message = ""
+            
+            print(f"🔍 Debug: Result type: {type(result)}")
+            print(f"🔍 Debug: Result: {result}")
+            
             if isinstance(result, tuple) and len(result) >= 2:
-                video_path, status_message = result
-
-                # Save status message
-                status_file = output_folder / "status.txt"
-                with open(status_file, "w") as f:
-                    f.write(status_message)
-
-                # Download video if it's a URL
-                if video_path and isinstance(video_path, str):
-                    if video_path.startswith("http"):
-                        # Download the video
-                        local_video_path = output_folder / "generated_video.mp4"
-                        self._download_file(video_path, local_video_path)
-                        print(f"🎥 Video downloaded to: {local_video_path}")
-                        return str(local_video_path)
-                    elif os.path.exists(video_path):
-                        # Copy the video if it's a local path
-                        local_video_path = output_folder / "generated_video.mp4"
-                        import shutil
-
-                        shutil.copy2(video_path, local_video_path)
-                        print(f"🎥 Video copied to: {local_video_path}")
-                        return str(local_video_path)
-                    else:
-                        print(f"⚠️ Video path not found: {video_path}")
-                        return None
+                # Handle tuple format: (video_path, status_message)
+                first_element, status_message = result
+                
+                if isinstance(first_element, dict):
+                    # Handle tuple with dict: ({'video': path, 'subtitles': None}, status_message)
+                    video_path = first_element.get('video')
                 else:
-                    print("⚠️ No video path in result")
-                    return None
+                    # Handle tuple format: (video_path, status_message)
+                    video_path = first_element
+                    
+            elif isinstance(result, dict):
+                # Handle dictionary format: {'video': path, 'subtitles': None}
+                video_path = result.get('video')
+                status_message = result.get('status', 'Video generated successfully')
             else:
                 print(f"⚠️ Unexpected result format: {result}")
+                return None
+
+            print(f"🔍 Debug: Extracted video_path: {video_path}")
+            print(f"🔍 Debug: Extracted status_message: {status_message}")
+
+            # Save status message
+            status_file = output_folder / "status.txt"
+            with open(status_file, "w") as f:
+                f.write(status_message)
+
+            # Download video if it's a URL
+            if video_path and isinstance(video_path, str):
+                if video_path.startswith("http"):
+                    # Download the video
+                    local_video_path = output_folder / "generated_video.mp4"
+                    self._download_file(video_path, local_video_path)
+                    print(f"🎥 Video downloaded to: {local_video_path}")
+                    return str(local_video_path)
+                elif os.path.exists(video_path):
+                    # Copy the video if it's a local path
+                    local_video_path = output_folder / "generated_video.mp4"
+                    import shutil
+
+                    shutil.copy2(video_path, local_video_path)
+                    print(f"🎥 Video copied to: {local_video_path}")
+                    return str(local_video_path)
+                else:
+                    print(f"⚠️ Video path not found: {video_path}")
+                    return None
+            else:
+                print("⚠️ No video path in result")
                 return None
 
         except Exception as e:

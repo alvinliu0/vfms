@@ -33,6 +33,9 @@ def create_gradio_interface(checkpoint_dir, output_dir):
     Returns:
         Gradio interface
     """
+    
+    # Define model name for output organization
+    model_name = "wan2.1_t2v_1.3B_singleGPU"
 
     def _infer(prompt, negative_prompt, input_text: str, api_token: str = "") -> tuple[Optional[str], Optional[str]]:
         """
@@ -68,10 +71,13 @@ def create_gradio_interface(checkpoint_dir, output_dir):
             # Parse input text as JSON
             input_json = json.loads(input_text)
 
-            # Create unique output folder
+            # Create unique output folder with model name
             timestamp = datetime.datetime.now(zoneinfo.ZoneInfo("US/Pacific")).strftime("%Y-%m-%d_%H-%M-%S")
             random_generation_id = "".join(random.choices(string.ascii_lowercase, k=4))
-            output_folder = os.path.join(output_dir, f"generation_{timestamp}_{random_generation_id}")
+            
+            # Create model-specific output directory
+            model_output_dir = os.path.join(output_dir, model_name)
+            output_folder = os.path.join(model_output_dir, f"generation_{timestamp}_{random_generation_id}")
             os.makedirs(output_folder, exist_ok=True)
 
             # Set generation parameters
@@ -81,6 +87,7 @@ def create_gradio_interface(checkpoint_dir, output_dir):
                 "checkpoint_dir": checkpoint_dir,
                 "output_folder": output_folder,
                 "video_save_name": "output",
+                "model_name": model_name,
                 **input_json,  # Merge additional parameters from JSON
             }
 

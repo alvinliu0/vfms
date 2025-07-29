@@ -1,13 +1,13 @@
 # VFMS - Video Generation Framework
 
-A comprehensive video generation framework built around the Wan2.1 text-to-video model, featuring a client-server architecture with secure API token handling.
+A command-line video generation framework built around the Wan2.1 text-to-video model, featuring a client-server architecture with secure API token handling.
 
 ## 🚀 Features
 
 - **Text-to-Video Generation**: Generate high-quality videos from text prompts using Wan2.1 1.3B model
+- **Command-Line Interface**: Full CLI support for automation and scripting
 - **Client-Server Architecture**: Separate host and client applications for flexible deployment
 - **Secure API Token Handling**: Command-line based token management to prevent credential leaks
-- **Gradio Interface**: User-friendly web interface for video generation
 - **Batch Processing**: Support for generating multiple videos in sequence
 - **Parameter Customization**: Fine-tune generation parameters via JSON configuration
 
@@ -17,7 +17,7 @@ A comprehensive video generation framework built around the Wan2.1 text-to-video
 vfms/
 ├── gradio_host/          # Gradio server application
 │   └── wan2.1_t2v_1.3B_singleGPU_host.py
-├── gradio_client/        # Client application for API calls
+├── gradio_client/        # CLI client application for API calls
 │   └── wan2.1_t2v_1.3B_singleGPU_client.py
 ├── gradio_output/        # Output directory for generated videos
 ├── Wan2.1/              # Wan2.1 model repository (submodule)
@@ -59,22 +59,32 @@ python gradio_client/wan2.1_t2v_1.3B_singleGPU_client.py \
 
 ### Setup
 
-1. **Clone the repository**:
+1. **Clone the repository with submodules**:
    ```bash
-   git clone <repository-url>
+   git clone --recursive <repository-url>
    cd vfms
    ```
 
-2. **Install dependencies**:
+2. **Update existing repository** (if already cloned):
+   ```bash
+   # If you have local changes, stash them first
+   git stash
+   git pull origin main
+   git submodule update --init --recursive --remote
+   git submodule sync --recursive
+   git stash pop  # Restore your changes
+   ```
+
+3. **Install dependencies**:
    ```bash
    pip install -r Wan2.1/requirements.txt
    pip install gradio gradio-client requests
    ```
 
-3. **Download Wan2.1 model** (if not already present):
+4. **Download Wan2.1 model** (if not already present):
    ```bash
    # Follow Wan2.1 installation instructions
-   # Ensure model checkpoints are available at /mnt/Wan2.1/Wan2.1-T2V-1.3B
+   # Ensure model checkpoints are available in Wan2.1/Wan2.1-T2V-1.3B/
    ```
 
 ## 🚀 Usage
@@ -93,7 +103,7 @@ python gradio_host/wan2.1_t2v_1.3B_singleGPU_host.py
 
 The server will be available at `http://localhost:8080`
 
-### Using the Client
+### Using the CLI Client
 
 #### Basic Usage
 
@@ -169,9 +179,9 @@ The host server can be configured via environment variables:
 
 ### Model Configuration
 
-The system expects the Wan2.1 model to be available at:
-- Model code: `/mnt/Wan2.1/`
-- Checkpoints: `/mnt/Wan2.1/Wan2.1-T2V-1.3B/`
+The system expects the Wan2.1 model to be available in the project structure:
+- Model code: `Wan2.1/`
+- Checkpoints: `Wan2.1/Wan2.1-T2V-1.3B/`
 
 ## 📊 Output
 
@@ -179,12 +189,25 @@ Generated videos are saved with the following structure:
 
 ```
 output_directory/
-├── generation_YYYY-MM-DD_HH-MM-SS_xxxx/
-│   ├── output.mp4              # Generated video
-│   ├── generation_params.json   # Generation parameters
-│   ├── prompt.txt              # Input prompt
-│   └── negative_prompt.txt     # Negative prompt
+├── wan2.1_t2v_1.3B_singleGPU/          # Model-specific directory
+│   ├── generation_YYYY-MM-DD_HH-MM-SS_xxxx/
+│   │   ├── generated_video.mp4          # Generated video
+│   │   ├── generation_params.json       # Generation parameters
+│   │   ├── prompt.txt                   # Input prompt
+│   │   ├── negative_prompt.txt          # Negative prompt
+│   │   ├── status.txt                   # Generation status
+│   │   └── request_metadata.json        # Client request metadata
+│   └── generation_YYYY-MM-DD_HH-MM-SS_yyyy/
+│       └── ...
+└── other_model_name/                     # Other models (if any)
+    └── ...
 ```
+
+This structure ensures:
+- **Model Organization**: Each model has its own directory
+- **Timestamp-based Folders**: Each generation gets a unique timestamp folder
+- **Complete Metadata**: All generation parameters and status are preserved
+- **Easy Navigation**: Clear hierarchy for multiple generations
 
 ## 🔒 Security Best Practices
 
@@ -202,6 +225,7 @@ output_directory/
 2. **Model not found**: Verify Wan2.1 model is properly installed
 3. **CUDA out of memory**: Reduce batch size or use smaller model
 4. **Invalid token**: Check API token format and permissions
+5. **Generation timeout**: Video generation can take 1-2 hours, be patient
 
 ### Debug Mode
 
@@ -211,6 +235,12 @@ Enable detailed logging by setting environment variables:
 export GRADIO_SHOW_ERROR=true
 export GRADIO_DEBUG=true
 ```
+
+### Performance Notes
+
+- **Generation Time**: Video generation typically takes 1-2 hours
+- **GPU Memory**: Requires significant GPU memory (H100 80GB recommended)
+- **Network Timeout**: Client is configured with 2-hour timeout for long generations
 
 ## 📝 License
 
