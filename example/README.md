@@ -8,6 +8,10 @@ This folder contains example scripts for using the VFMS video generation framewo
 
 A script that handles CLI arguments for basic inputs (API token, endpoint, generation parameters) and calls the client's `generate_video` or `batch_generate` method for video generation. Supports both single and batch generation modes.
 
+### `scripts/wan2.1_t2v_14B_singleGPU/generate.py`
+
+A script that handles CLI arguments for basic inputs (API token, endpoint, generation parameters) and calls the client's `generate_video` or `batch_generate` method for video generation using the 14B model. Supports both single and batch generation modes.
+
 #### Features
 
 - **CLI Argument Handling**: Parses basic inputs (API token, endpoint, generation args)
@@ -57,32 +61,23 @@ A script that handles CLI arguments for basic inputs (API token, endpoint, gener
 #### Usage Examples
 
 ```bash
-# Single generation with required arguments
-python generate.py --token "your_token" --endpoint "your_endpoint" --prompt "A beautiful sunset"
+# Single generation with required arguments (1.3B model)
+python example/scripts/wan2.1_t2v_1.3B_singleGPU/generate.py --token "your_token" --endpoint "your_endpoint" --prompt "A beautiful sunset"
 
-# Batch generation with multiple prompts (comma-separated)
-python generate.py --token "your_token" --endpoint "your_endpoint" --batch-prompts "A beautiful sunset,A stormy night,A peaceful morning"
+# Single generation with required arguments (14B model)
+python example/scripts/wan2.1_t2v_14B_singleGPU/generate.py --token "your_token" --endpoint "your_endpoint" --prompt "A beautiful sunset"
 
-# Batch generation with file-based prompts (handles commas in prompts)
-python generate.py --token "your_token" --endpoint "your_endpoint" --batch-prompts-file "prompts_example.txt"
+# Batch generation with multiple prompts (comma-separated) - 1.3B model
+python example/scripts/wan2.1_t2v_1.3B_singleGPU/generate.py --token "your_token" --endpoint "your_endpoint" --batch-prompts "A beautiful sunset,A stormy night,A peaceful morning"
 
-# Batch generation with custom negative prompts (comma-separated)
-python generate.py --token "your_token" --endpoint "your_endpoint" --batch-prompts "prompt1,prompt2" --batch-negative-prompts "neg1,neg2"
+# Batch generation with file-based negative prompts - 1.3B model
+python example/scripts/wan2.1_t2v_1.3B_singleGPU/generate.py --token "your_token" --endpoint "your_endpoint" --batch-prompts-file "example\scripts\wan2.1_t2v_1.3B_singleGPU\prompts_example.txt" --batch-negative-prompts-file "example\scripts\wan2.1_t2v_1.3B_singleGPU\negative_prompts_example.txt"
 
-# Batch generation with file-based negative prompts
-python generate.py --token "your_token" --endpoint "your_endpoint" --batch-prompts-file "prompts_example.txt" --batch-negative-prompts-file "negative_prompts_example.txt"
+# Test connection only (1.3B model)
+python example/scripts/wan2.1_t2v_1.3B_singleGPU/generate.py --token "your_token" --endpoint "your_endpoint" --test-connection
 
-# Test connection only
-python generate.py --token "your_token" --endpoint "your_endpoint" --test-connection
-
-# With custom parameters
-python generate.py --token "your_token" --endpoint "your_endpoint" --prompt "A beautiful sunset" --frame-num 24 --sample-steps 75 --width 1024 --height 576
-
-# Batch generation with custom parameters
-python generate.py --token "your_token" --endpoint "your_endpoint" --batch-prompts "prompt1,prompt2,prompt3" --frame-num 24 --sample-steps 75
-
-# With custom output directory
-python generate.py --token "your_token" --endpoint "your_endpoint" --prompt "A beautiful sunset" --output-dir "./my_results"
+# With custom parameters (1.3B model)
+python example/scripts/wan2.1_t2v_1.3B_singleGPU/generate.py --token "your_token" --endpoint "your_endpoint" --prompt "A beautiful sunset" --frame-num 24 --sample-steps 75 --width 1024 --height 576
 ```
 
 #### Security Benefits
@@ -111,99 +106,6 @@ python generate.py --token "your_token" --endpoint "your_endpoint" --prompt "A b
 5. **Check Logs**: Monitor the output for progress and errors
 6. **Use Seeds**: Set `--base-seed` for reproducible results
 
-#### Example Output
-
-**Single Generation:**
-```
-🎬 Wan2.1 Video Generation Script
-==================================================
-🔗 Connecting to endpoint: https://your-endpoint.com
-🧪 Testing connection...
-✅ Connection successful!
-
-📋 Single Generation Parameters:
-   Prompt: A beautiful sunset over the ocean, cinematic lighting, 4K quality
-   Negative Prompt: blurry, low quality, distorted, ugly
-   Frames: 16
-   Steps: 50
-   Guidance Scale: 7.5
-   Resolution: 832x480
-   Seed: 42
-
-🚀 Starting single video generation...
-⏳ This may take 1-2 hours. Please be patient...
-
-✅ Generation completed successfully!
-🎥 Video saved to: ./results/wan2.1_t2v_1.3B_singleGPU/generation_20250729_143022/generated_video.mp4
-📁 Full output directory: ./results/wan2.1_t2v_1.3B_singleGPU/generation_20250729_143022
-📄 Generated files:
-   - generated_video.mp4
-   - generation_params.json
-   - prompt.txt
-   - negative_prompt.txt
-   - status.txt
-   - request_metadata.json
-
-🎉 Script completed successfully!
-```
-
-**Batch Generation:**
-```
-🎬 Wan2.1 Video Generation Script
-==================================================
-🔗 Connecting to endpoint: https://your-endpoint.com
-🧪 Testing connection...
-✅ Connection successful!
-
-📋 Batch Generation Parameters:
-   Number of videos: 3
-   Frames: 16
-   Steps: 50
-   Guidance Scale: 7.5
-   Resolution: 832x480
-   Seed: 42
-
-📝 Prompts:
-   1. A beautiful sunset over the ocean
-   2. A stormy night with lightning
-   3. A peaceful morning in the forest
-
-🚫 Negative Prompts:
-   1. blurry, low quality, distorted, ugly
-   2. blurry, low quality, distorted, ugly
-   3. blurry, low quality, distorted, ugly
-
-🚀 Starting batch generation of 3 videos...
-⏳ This may take several hours. Please be patient...
-
---- Generating video 1/3 ---
-🎬 Generating video with prompt: 'A beautiful sunset over the ocean'
-📁 Output folder: ./results/wan2.1_t2v_1.3B_singleGPU/generation_20250729_143022
-🤖 Model: wan2.1_t2v_1.3B_singleGPU
-✅ Generation completed!
-
---- Generating video 2/3 ---
-🎬 Generating video with prompt: 'A stormy night with lightning'
-📁 Output folder: ./results/wan2.1_t2v_1.3B_singleGPU/generation_20250729_143045
-🤖 Model: wan2.1_t2v_1.3B_singleGPU
-✅ Generation completed!
-
---- Generating video 3/3 ---
-🎬 Generating video with prompt: 'A peaceful morning in the forest'
-📁 Output folder: ./results/wan2.1_t2v_1.3B_singleGPU/generation_20250729_143108
-🤖 Model: wan2.1_t2v_1.3B_singleGPU
-✅ Generation completed!
-
-✅ Batch generation completed!
-🎥 Successfully generated: 3/3 videos
-
-📁 Generated videos:
-   1. ./results/wan2.1_t2v_1.3B_singleGPU/generation_20250729_143022/generated_video.mp4
-   2. ./results/wan2.1_t2v_1.3B_singleGPU/generation_20250729_143045/generated_video.mp4
-   3. ./results/wan2.1_t2v_1.3B_singleGPU/generation_20250729_143108/generated_video.mp4
-
-🎉 Script completed successfully!
-```
 
 #### Troubleshooting
 

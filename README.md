@@ -4,7 +4,7 @@ A command-line video generation framework built around the Wan2.1 text-to-video 
 
 ## 🚀 Features
 
-- **Text-to-Video Generation**: Generate high-quality videos from text prompts using Wan2.1 1.3B model
+- **Text-to-Video Generation**: Generate high-quality videos from text prompts using Wan2.1 1.3B and 14B models
 - **Command-Line Interface**: Full CLI support for automation and scripting
 - **Client-Server Architecture**: Separate host and client applications for flexible deployment
 - **Secure API Token Handling**: Command-line based token management to prevent credential leaks
@@ -16,13 +16,19 @@ A command-line video generation framework built around the Wan2.1 text-to-video 
 ```
 vfms/
 ├── gradio_host/          # Gradio server application
-│   └── wan2.1_t2v_1.3B_singleGPU_host.py
+│   ├── wan2.1_t2v_1.3B_singleGPU_host.py
+│   └── wan2.1_t2v_14B_singleGPU_host.py
 ├── gradio_client/        # CLI client application for API calls
-│   └── wan2.1_t2v_1.3B_singleGPU_client.py
+│   ├── wan2.1_t2v_1.3B_singleGPU_client.py
+│   └── wan2.1_t2v_14B_singleGPU_client.py
 ├── gradio_output/        # Output directory for generated videos
 ├── example/              # Example scripts and usage patterns
 │   ├── scripts/          # Ready-to-use generation scripts
-│   │   └── wan2.1_t2v_1.3B_singleGPU/  # Model-specific directory
+│   │   ├── wan2.1_t2v_1.3B_singleGPU/  # Model-specific directory
+│   │   │   ├── generate.py
+│   │   │   ├── prompts_example.txt
+│   │   │   └── negative_prompts_example.txt
+│   │   └── wan2.1_t2v_14B_singleGPU/  # Model-specific directory
 │   │       ├── generate.py
 │   │       ├── prompts_example.txt
 │   │       └── negative_prompts_example.txt
@@ -47,6 +53,11 @@ This repository implements secure API token handling to prevent credential leaks
 ```bash
 # Preferred: Use command-line argument (most secure)
 python gradio_client/wan2.1_t2v_1.3B_singleGPU_client.py \
+  --token "your_api_token_here" \
+  --prompt "A beautiful sunset over the ocean"
+
+# For 14B model:
+python gradio_client/wan2.1_t2v_14B_singleGPU_client.py \
   --token "your_api_token_here" \
   --prompt "A beautiful sunset over the ocean"
 
@@ -91,7 +102,9 @@ python gradio_client/wan2.1_t2v_1.3B_singleGPU_client.py \
 4. **Download Wan2.1 model** (if not already present):
    ```bash
    # Follow Wan2.1 installation instructions
-   # Ensure model checkpoints are available in Wan2.1/Wan2.1-T2V-1.3B/
+   # Ensure model checkpoints are available in:
+   # - Wan2.1/Wan2.1-T2V-1.3B/ (for 1.3B model)
+   # - Wan2.1/Wan2.1-T2V-14B/ (for 14B model)
    ```
 
 ## 🚀 Usage
@@ -104,8 +117,11 @@ export GRADIO_SERVER_NAME="0.0.0.0"
 export GRADIO_SERVER_PORT=8080
 export GRADIO_SAVE_DIR="/path/to/output/directory"
 
-# Start the Gradio host
+# Start the Gradio host (1.3B model)
 python gradio_host/wan2.1_t2v_1.3B_singleGPU_host.py
+
+# Or start the 14B model host
+python gradio_host/wan2.1_t2v_14B_singleGPU_host.py
 ```
 
 The server will be available at `http://localhost:8080`
@@ -115,8 +131,14 @@ The server will be available at `http://localhost:8080`
 #### Basic Usage
 
 ```bash
-# Generate a video with command-line token
+# Generate a video with command-line token (1.3B model)
 python gradio_client/wan2.1_t2v_1.3B_singleGPU_client.py \
+  --token "your_api_token" \
+  --prompt "A beautiful sunset over the ocean" \
+  --endpoint "http://localhost:8080"
+
+# Generate a video with command-line token (14B model)
+python gradio_client/wan2.1_t2v_14B_singleGPU_client.py \
   --token "your_api_token" \
   --prompt "A beautiful sunset over the ocean" \
   --endpoint "http://localhost:8080"
@@ -125,8 +147,16 @@ python gradio_client/wan2.1_t2v_1.3B_singleGPU_client.py \
 #### Advanced Usage
 
 ```bash
-# With custom parameters
+# With custom parameters (1.3B model)
 python gradio_client/wan2.1_t2v_1.3B_singleGPU_client.py \
+  --token "your_api_token" \
+  --prompt "A beautiful sunset over the ocean" \
+  --negative-prompt "blurry, low quality" \
+  --parameters '{"frame_num": 16, "sample_steps": 50, "sample_guide_scale": 7.5}' \
+  --output-dir "./my_results"
+
+# With custom parameters (14B model)
+python gradio_client/wan2.1_t2v_14B_singleGPU_client.py \
   --token "your_api_token" \
   --prompt "A beautiful sunset over the ocean" \
   --negative-prompt "blurry, low quality" \
@@ -137,8 +167,13 @@ python gradio_client/wan2.1_t2v_1.3B_singleGPU_client.py \
 #### Test Connection
 
 ```bash
-# Test connection without generating video
+# Test connection without generating video (1.3B model)
 python gradio_client/wan2.1_t2v_1.3B_singleGPU_client.py \
+  --token "your_api_token" \
+  --test-connection
+
+# Test connection without generating video (14B model)
+python gradio_client/wan2.1_t2v_14B_singleGPU_client.py \
   --token "your_api_token" \
   --test-connection
 ```
@@ -253,15 +288,14 @@ export GRADIO_DEBUG=true
 
 For quick start and simple usage, see the `example/` folder:
 
-### Quick Start Script
-
-The `example/scripts/wan2.1_t2v_1.3B_singleGPU/generate.py` script handles CLI arguments for basic inputs and calls the client's `generate_video` or `batch_generate` method for video generation. Supports both single and batch generation modes:
+### Quick Start Scripts
 
 ```bash
-# Option 1: Navigate to the model-specific directory
+# 1.3B Model
 cd example/scripts/wan2.1_t2v_1.3B_singleGPU
 python generate.py --token "your_token" --endpoint "your_endpoint" --prompt "your prompt"
 
-# Option 2: Run directly from vfms root directory
-python example/scripts/wan2.1_t2v_1.3B_singleGPU/generate.py --token "your_token" --endpoint "your_endpoint" --prompt "your prompt"
+# 14B Model
+cd example/scripts/wan2.1_t2v_14B_singleGPU
+python generate.py --token "your_token" --endpoint "your_endpoint" --prompt "your prompt"
 ```
