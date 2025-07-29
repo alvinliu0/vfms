@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 import gradio_client
+import httpx
 import requests
 
 
@@ -54,12 +55,23 @@ class Wan2_1Client:
         # Try to initialize Gradio client
         self.client = None
         self.api_name = "/predict"  # Default API endpoint
+        
+        # Initialize Gradio client with authentication
+        self.headers = {"Authorization": f"Bearer {api_token}"} if api_token else {}
+
+        client_kwargs = {
+            "headers": self.headers if self.headers else None,
+            "httpx_kwargs": {"timeout": httpx.Timeout(10.0)},  # shorter timeout for testing
+            "ssl_verify": True,  # set to False if you have self-signed certs
+        }
+        
         try:
-            self.client = gradio_client.Client(self.endpoint_url)
-            print(f"✅ Gradio client initialized for: {self.endpoint_url}")
+            print(f"🔄 Initializing Gradio client with headers: {self.headers}")
+            self.client = gradio_client.Client(self.endpoint_url, **client_kwargs)
+            print(f"✅ Gradio client initialized with authentication for: {self.endpoint_url}")
         except Exception as e:
             print(f"⚠️ Gradio client initialization failed: {e}")
-            print("💡 Will use direct HTTP requests instead")
+            print("💡 Please ensure the server is running and accessible")
 
         # Validate endpoint URL
         self._check_endpoint_url()
@@ -105,8 +117,8 @@ class Wan2_1Client:
             return False
 
     def test_connection(self) -> bool:
-        """Test connection to the endpoint."""
-        # First, test basic connectivity
+        """Test connection to the endpoint using Gradio client."""
+        # Test basic connectivity
         try:
             print(f"🔄 Testing basic connectivity to: {self.endpoint_url}")
             response = requests.get(self.endpoint_url, timeout=10, 
@@ -116,12 +128,11 @@ class Wan2_1Client:
             print(f"❌ Endpoint is not reachable: {e}")
             return False
 
-        # Test Gradio client if available
+        # Test Gradio client
         if self.client is None:
-            print("⚠️ Gradio client not available, but endpoint is reachable.")
-            print("💡 Will use direct HTTP requests for API calls.")
-            self.api_name = "/predict"  # Default fallback
-            return True
+            print("❌ Gradio client not available")
+            print("💡 Please ensure the server is running and accessible")
+            return False
 
         try:
             print("🔄 Testing Gradio API discovery...")
@@ -139,23 +150,19 @@ class Wan2_1Client:
                         actual_functions.append(func_name)
 
                 if actual_functions:
-                    self.api_name = f"/{actual_functions[0]}"
                     print(f"✅ Found function: {actual_functions[0]}")
-                    print(f"➡️ Using api_name='{self.api_name}' for inference")
+                    return True
                 else:
-                    # If no actual functions found, use the standard gr.Interface endpoint
-                    self.api_name = "/predict"  # gr.Interface exposes API endpoints by default
-                    print("⚠️ No specific functions found, using '/predict' for gr.Interface")
+                    print("⚠️ No specific functions found")
+                    return True  # Still return True for basic connectivity
             else:
-                print("⚠️ No API functions discovered, using default endpoint")
-                self.api_name = "/predict"
+                print("⚠️ No API functions discovered")
+                return True  # Still return True for basic connectivity
 
-            return True
         except Exception as e:
             print(f"❌ Gradio API discovery failed: {e}")
-            print("💡 Will use direct HTTP requests for API calls.")
-            self.api_name = "/predict"  # Default fallback
-            return True  # Return True since basic connectivity works
+            print("💡 Please ensure the server exposes API endpoints")
+            return False
 
     def generate_video(
         self, prompt: str, negative_prompt: str = "", parameters: Optional[Dict[str, Any]] = None, save_metadata: bool = True
@@ -208,7 +215,7 @@ class Wan2_1Client:
                     json.dump(request_data, f, indent=2)
                 print(f"📄 Request metadata saved to: {metadata_file}")
 
-            # Try using gradio_client first
+            # Try using gradio_client
             try:
                 if self.client is None:
                     raise RuntimeError("gradio_client is not available")
@@ -217,22 +224,21 @@ class Wan2_1Client:
                 # Map parameters to correct names
                 mapped_parameters = self._map_parameters(parameters)
 
-                # Use the correct API endpoint for gr.Interface with api_open=True in Gradio 5.38.2
+                # Use gradio_client for prediction
                 result = self.client.predict(
                     prompt,
                     negative_prompt,
                     json.dumps(mapped_parameters),
                     self.api_token,
-                    api_name="/predict",  # gr.Interface with api_open=True exposes API endpoints in Gradio 5.38.2
                 )
 
                 print("✅ Generation completed!")
                 print(f"📊 Result: {result}")
 
             except Exception as e:
-                print(f"⚠️ gradio_client failed: {e}")
-                print("🔄 Trying direct HTTP request...")
-                result = self._make_direct_request(prompt, negative_prompt, parameters)
+                print(f"❌ gradio_client failed: {e}")
+                print("💡 Please ensure the server is running and API endpoints are exposed")
+                return None
 
             # Parse the result
             if isinstance(result, tuple) and len(result) >= 2:
@@ -297,65 +303,6 @@ class Wan2_1Client:
                 del mapped_params[param]
 
         return mapped_params
-
-    def _make_direct_request(self, prompt: str, negative_prompt: str, parameters: Dict[str, Any]) -> tuple:
-        """Make a direct HTTP request to the endpoint."""
-        try:
-            # Map parameters to correct names
-            mapped_parameters = self._map_parameters(parameters)
-
-            # Prepare headers
-            headers = {"Content-Type": "application/json"}
-            if self.api_token:
-                headers["Authorization"] = f"Bearer {self.api_token}"
-
-            # Prepare request data - match the Gradio app's expected input format
-            # The Gradio app expects: [prompt, negative_prompt, input_text, api_token]
-            data = {"data": [prompt, negative_prompt, json.dumps(mapped_parameters), self.api_token]}
-
-            # Make the request to the correct endpoint - use /gradio_api/ prefix
-            endpoint_path = "/gradio_api/predict/"
-            print(f"🔄 Making direct HTTP request to: {self.endpoint_url}{endpoint_path}")
-            print(f"📤 Request data: {data}")
-            response = requests.post(f"{self.endpoint_url}{endpoint_path}", json=data, headers=headers, timeout=300)
-
-            if response.status_code == 200:
-                result = response.json()
-                print(f"✅ Direct request successful: {result}")
-                # The Gradio app returns [video_path, status_message]
-                return result.get("data", [None, "No data in response"])
-            elif response.status_code == 404:
-                # Try alternative endpoint patterns for Gradio API
-                alternative_endpoints = [
-                    "/gradio_api/predict/",
-                    "/gradio_api/run/",
-                    "/gradio_api/predict",
-                    "/gradio_api/run",
-                    "/api/predict/",
-                    "/api/run/",
-                    "/predict",
-                    "/run",
-                ]
-                for alt_endpoint in alternative_endpoints:
-                    if alt_endpoint != endpoint_path:
-                        print(f"🔄 Trying alternative endpoint: {alt_endpoint}")
-                        alt_response = requests.post(f"{self.endpoint_url}{alt_endpoint}", json=data, headers=headers, timeout=300)
-                        if alt_response.status_code == 200:
-                            result = alt_response.json()
-                            print(f"✅ Alternative endpoint successful: {result}")
-                            return result.get("data", [None, "No data in response"])
-                        else:
-                            print(f"❌ Alternative endpoint failed: {alt_response.status_code}")
-
-                print(f"❌ All endpoints failed. Last error: {response.status_code} - {response.text}")
-                return None, f"HTTP {response.status_code}: {response.text}"
-            else:
-                print(f"❌ Direct request failed: {response.status_code} - {response.text}")
-                return None, f"HTTP {response.status_code}: {response.text}"
-
-        except Exception as e:
-            print(f"❌ Direct request failed: {e}")
-            return None, str(e)
 
     def _download_file(self, url: str, local_path: Path) -> bool:
         """Download a file from URL to local path."""

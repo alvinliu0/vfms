@@ -116,9 +116,9 @@ def create_gradio_interface(checkpoint_dir, output_dir):
                 os.path.join(output_folder, "output"),
             ]
 
-            # Add negative prompt if provided
-            if negative_prompt:
-                cmd_args.extend(["--negative_prompt", negative_prompt])
+            # Note: generate.py doesn't support --negative_prompt argument
+            # Negative prompts are handled internally by the model using default values
+            # The negative prompt is written to file for reference but not passed to generate.py
 
             # Add additional parameters from JSON with correct mapping
             if "frame_num" in input_json:
