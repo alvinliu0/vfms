@@ -61,7 +61,7 @@ class Wan2_1Client:
 
         client_kwargs = {
             "headers": self.headers if self.headers else None,
-            "httpx_kwargs": {"timeout": httpx.Timeout(10.0)},  # shorter timeout for testing
+            "httpx_kwargs": {"timeout": httpx.Timeout(7200.0)},  # 2 hours timeout for generation
             "ssl_verify": True,  # set to False if you have self-signed certs
         }
         

@@ -113,7 +113,13 @@ def create_gradio_interface(checkpoint_dir, output_dir):
                 "--ckpt_dir",
                 checkpoint_dir,
                 "--save_file",
-                os.path.join(output_folder, "output"),
+                os.path.join(output_folder, "output.mp4"),  # Add .mp4 extension
+                "--offload_model",
+                "False",  # Keep model on GPU for faster generation
+                "--sample_shift",
+                "5.0",  # Default shift parameter
+                "--sample_solver",
+                "unipc",  # Default solver
             ]
 
             # Note: generate.py doesn't support --negative_prompt argument
@@ -165,6 +171,8 @@ def create_gradio_interface(checkpoint_dir, output_dir):
             env["CUDA_LAUNCH_BLOCKING"] = "0"  # Non-blocking CUDA operations
             env["TORCH_CUDNN_V8_API_ENABLED"] = "1"  # Enable cuDNN v8 for H100
             env["NVIDIA_TF32_OVERRIDE"] = "1"  # Enable TF32 for faster computation
+            env["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:2048,expandable_segments:True"  # Better memory management
+            env["CUDA_DEVICE_MAX_CONNECTIONS"] = "1"  # Reduce GPU memory fragmentation
 
             result = subprocess.run(
                 cmd_args,
@@ -184,7 +192,7 @@ def create_gradio_interface(checkpoint_dir, output_dir):
                 return None, error_msg
 
             # Look for the generated video
-            expected_video_path = os.path.join(output_folder, "output.mp4")
+            expected_video_path = os.path.join(output_folder, "output.mp4")  # Updated to match save_file
 
             # Debug: List all files in output directory
             print(f"Files in output directory {output_folder}:")
