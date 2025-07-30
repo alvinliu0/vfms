@@ -431,9 +431,9 @@ Examples:
                        help="API token for authentication (recommended over file)")
     parser.add_argument("--output-dir", default="./results", 
                        help="Output directory for results")
-    parser.add_argument("--prompt", required=True, 
+    parser.add_argument("--prompt", 
                        help="Text prompt for video generation")
-    parser.add_argument("--image", required=True,
+    parser.add_argument("--image",
                        help="Path to input image file")
     parser.add_argument("--negative-prompt", default="", 
                        help="Negative prompt")
@@ -491,6 +491,14 @@ Examples:
     if args.test_connection:
         print("✅ Connection test successful!")
         return
+
+    # Validate required arguments for generation
+    if not args.prompt:
+        print("❌ --prompt is required for video generation")
+        sys.exit(1)
+    if not args.image:
+        print("❌ --image is required for video generation")
+        sys.exit(1)
 
     # Parse parameters
     parameters = None
