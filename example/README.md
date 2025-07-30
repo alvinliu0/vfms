@@ -58,6 +58,7 @@ A script that handles CLI arguments for basic inputs (API token, endpoint, gener
 | `--base-seed` | ❌ No | Random seed for reproducibility | 42 |
 | `--width` | ❌ No | Video width (must be divisible by 8) | 832 |
 | `--height` | ❌ No | Video height (must be divisible by 8) | 480 |
+| `--checkpoint` | ❌ No | Choose checkpoint model: 480p or 720p (i2v only) | 480p |
 | `--use-prompt-extend` | ❌ No | Use prompt extension | False |
 
 *Either `--prompt`, `--batch-prompts`, or `--batch-prompts-file` is required (mutually exclusive)
@@ -89,8 +90,11 @@ python example/scripts/wan2.1_i2v_14B_singleGPU/generate.py --token "your_token"
 # With custom parameters (1.3B model)
 python example/scripts/wan2.1_t2v_1.3B_singleGPU/generate.py --token "your_token" --endpoint "your_endpoint" --prompt "A beautiful sunset" --frame-num 24 --sample-steps 75 --width 1024 --height 576
 
-# With custom parameters (i2v 14B model)
-python example/scripts/wan2.1_i2v_14B_singleGPU/generate.py --token "your_token" --endpoint "your_endpoint" --prompt "A beautiful sunset" --image input.jpg --frame-num 81 --sample-steps 40 --width 832 --height 480
+# With custom parameters (i2v 14B model, 480p checkpoint)
+python example/scripts/wan2.1_i2v_14B_singleGPU/generate.py --token "your_token" --endpoint "your_endpoint" --prompt "A beautiful sunset" --image input.jpg --frame-num 81 --sample-steps 40 --width 832 --height 480 --checkpoint 480p
+
+# High resolution generation with 720p checkpoint
+python example/scripts/wan2.1_i2v_14B_singleGPU/generate.py --token "your_token" --endpoint "your_endpoint" --prompt "A beautiful sunset" --image input.jpg --width 1280 --height 720 --checkpoint 720p
 ```
 
 #### Security Benefits
@@ -108,6 +112,11 @@ python example/scripts/wan2.1_i2v_14B_singleGPU/generate.py --token "your_token"
    export ENDPOINT_URL="your_endpoint"
    python generate.py --token "$API_TOKEN" --endpoint "$ENDPOINT_URL" --prompt "A beautiful sunset"
    ```
+
+2. **Checkpoint Selection (i2v)**: The i2v 14B model supports two checkpoints that can be explicitly chosen:
+   - **480P Model**: Use `--checkpoint 480p` for standard resolution
+   - **720P Model**: Use `--checkpoint 720p` for high resolution
+   - Default is 480p if not specified
 
 2. **Test Connection First**: Always test the connection before running generation:
    ```bash

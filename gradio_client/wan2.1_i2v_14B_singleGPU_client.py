@@ -196,6 +196,7 @@ class Wan2_1Client:
                     "base_seed": int(time.time()) % 1000000,  # Random seed
                     "width": 832,
                     "height": 480,
+                    "checkpoint": "480p",  # Default to 480p checkpoint
                     "use_prompt_extend": False,
                 }
 

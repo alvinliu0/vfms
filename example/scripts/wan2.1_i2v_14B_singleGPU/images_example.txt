@@ -1,5 +1,1 @@
-input_images/sunset.jpg
-input_images/mountain.jpg
-input_images/city.jpg
-input_images/forest.jpg
-input_images/castle.jpg 
+example/scripts/wan2.1_i2v_14B_singleGPU/i2v_input.jpg

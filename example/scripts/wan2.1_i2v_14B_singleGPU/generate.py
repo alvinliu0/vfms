@@ -76,8 +76,12 @@ def parse_arguments():
     parser.add_argument("--sample-steps", type=int, default=40, help="Inference steps (20-100)")
     parser.add_argument("--sample-guide-scale", type=float, default=5.0, help="Guidance scale (1.0-20.0)")
     parser.add_argument("--base-seed", type=int, default=42, help="Random seed for reproducibility")
-    parser.add_argument("--width", type=int, default=832, help="Video width (must be divisible by 8)")
-    parser.add_argument("--height", type=int, default=480, help="Video height (must be divisible by 8)")
+    parser.add_argument("--width", type=int, default=832, 
+                       help="Video width (must be divisible by 8)")
+    parser.add_argument("--height", type=int, default=480, 
+                       help="Video height (must be divisible by 8)")
+    parser.add_argument("--checkpoint", choices=["480p", "720p"], default="480p",
+                       help="Choose checkpoint model: 480p or 720p")
     parser.add_argument("--use-prompt-extend", action="store_true", help="Use prompt extension")
     
     args = parser.parse_args()
@@ -172,6 +176,7 @@ def main():
         "base_seed": args.base_seed,
         "width": args.width,
         "height": args.height,
+        "checkpoint": args.checkpoint,
         "use_prompt_extend": args.use_prompt_extend,
     }
     
