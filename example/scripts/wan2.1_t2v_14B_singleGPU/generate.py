@@ -10,16 +10,25 @@ Usage:
 """
 
 import argparse
+import importlib.util
 import json
-import os
 import sys
 from pathlib import Path
 
-# Add the project root to the Python path
-project_root = Path(__file__).parent.parent.parent.parent
-sys.path.insert(0, str(project_root))
+# Add the project root to the path so we can import the client
+script_dir = Path(__file__).parent
+project_root = script_dir.parent.parent.parent  # Go up three levels from generate.py
 
-from gradio_client.wan2_1_t2v_14B_singleGPU_client import Wan2_1Client
+# Add project root to Python path
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
+
+# Import the client class using importlib for filename with dots
+client_module_path = project_root / "gradio_client" / "wan2.1_t2v_14B_singleGPU_client.py"
+spec = importlib.util.spec_from_file_location("wan2_1_client", client_module_path)
+client_module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(client_module)
+Wan2_1Client = client_module.Wan2_1Client
 
 
 def load_prompts_from_file(file_path: str) -> list:
@@ -143,31 +152,65 @@ Examples:
 
     args = parser.parse_args()
 
-    # Initialize client
-    client = Wan2_1Client(args.endpoint, "", args.output_dir)
-
-    # Load API token
+    # Load API token first
     api_token = args.token
     if not api_token:
-        if client.load_api_token(args.token_file):
-            api_token = client.api_token
-        else:
-            print("❌ No API token provided and token file not found")
-            print("💡 Use --token to provide API token or create api_token.txt file")
-            sys.exit(1)
+        # Try to load from file
+        try:
+            token_path = Path(args.token_file)
+            if token_path.exists():
+                with open(token_path, "r") as f:
+                    token_content = f.read().strip()
+                
+                # Skip lines that start with # (comments) and empty lines
+                token_lines = [line.strip() for line in token_content.split("\n") 
+                             if line.strip() and not line.startswith("#")]
+                
+                if token_lines:
+                    api_token = token_lines[0]
+                    # Check if the token looks like a placeholder
+                    if api_token in ["your_api_token_here", "your_api_token_here_12345"]:
+                        print("❌ API token appears to be a placeholder")
+                        print("Please replace 'your_api_token_here' with your actual API token")
+                        api_token = ""
+                    else:
+                        print(f"✅ API token loaded from file: {api_token[:10]}...")
+                else:
+                    print("❌ API token file is empty or contains only comments")
+                    api_token = ""
+            else:
+                print("⚠️ API token file not found: api_token.txt")
+                print("💡 You can provide the token via --token argument or create api_token.txt")
+                api_token = ""
+        except Exception as e:
+            print(f"⚠️ Error loading API token from file: {e}")
+            api_token = ""
+    
+    if not api_token:
+        print("❌ No API token provided and token file not found")
+        print("💡 Use --token to provide API token or create api_token.txt file")
+        sys.exit(1)
+    else:
+        print(f"✅ API token provided: {api_token[:10]}...")
 
-    # Update client with API token
-    client.api_token = api_token
-    client.headers["Authorization"] = f"Bearer {api_token}"
+    # Initialize client with API token
+    print(f"🔗 Connecting to endpoint: {args.endpoint}")
+    client = Wan2_1Client(
+        endpoint_url=args.endpoint,
+        api_token=api_token,
+        output_dir=args.output_dir
+    )
 
     # Test connection if requested
     if args.test_connection:
+        print("🧪 Testing connection...")
         if client.test_connection():
             print("✅ Connection test successful!")
-            sys.exit(0)
+            print("✅ Connection test completed successfully!")
+            return True
         else:
             print("❌ Connection test failed!")
-            sys.exit(1)
+            return False
 
     # Parse parameters if provided
     parameters = None

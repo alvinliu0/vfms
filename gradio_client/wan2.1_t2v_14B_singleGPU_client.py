@@ -117,24 +117,51 @@ class Wan2_1Client:
             return False
 
     def test_connection(self) -> bool:
-        """
-        Test connection to the Gradio endpoint.
-
-        Returns:
-            True if connection successful, False otherwise
-        """
+        """Test connection to the endpoint using Gradio client."""
+        # Test basic connectivity
         try:
-            if not self.client:
-                print("❌ Gradio client not initialized")
-                return False
+            print(f"🔄 Testing basic connectivity to: {self.endpoint_url}")
+            response = requests.get(self.endpoint_url, timeout=10, 
+                                 headers=self.headers)
+            print(f"✅ Endpoint is reachable (HTTP {response.status_code})")
+        except Exception as e:
+            print(f"❌ Endpoint is not reachable: {e}")
+            return False
 
-            # Try to get the API info
-            api_info = self.client.view_api()
-            print(f"✅ Connection successful! API info: {api_info}")
-            return True
+        # Test Gradio client
+        if self.client is None:
+            print("❌ Gradio client not available")
+            print("💡 Please ensure the server is running and accessible")
+            return False
+
+        try:
+            print("🔄 Testing Gradio API discovery...")
+            api_info = self.client.view_api(print_info=False, 
+                                          return_format="dict") or {}
+
+            if api_info:
+                available_functions = list(api_info.keys())
+                print(f"Available functions: {available_functions}")
+
+                # Look for actual function names (not endpoint categories)
+                actual_functions = []
+                for func_name in available_functions:
+                    if func_name not in ["named_endpoints", "unnamed_endpoints"]:
+                        actual_functions.append(func_name)
+
+                if actual_functions:
+                    print(f"✅ Found function: {actual_functions[0]}")
+                    return True
+                else:
+                    print("⚠️ No specific functions found")
+                    return True  # Still return True for basic connectivity
+            else:
+                print("⚠️ No API functions discovered")
+                return True  # Still return True for basic connectivity
 
         except Exception as e:
-            print(f"❌ Connection test failed: {e}")
+            print(f"❌ Gradio API discovery failed: {e}")
+            print("💡 Please ensure the server exposes API endpoints")
             return False
 
     def generate_video(
@@ -146,127 +173,164 @@ class Wan2_1Client:
         Args:
             prompt: Text prompt for video generation
             negative_prompt: Negative prompt to avoid certain elements
-            parameters: Optional generation parameters
-            save_metadata: Whether to save metadata files
+            parameters: Additional generation parameters
+            save_metadata: Whether to save request metadata
 
         Returns:
-            Path to the generated video file, or None if generation failed
+            Path to the downloaded video file, or None if generation failed
         """
         try:
-            if not self.client:
-                print("❌ Gradio client not initialized")
-                return None
-
-            if not prompt:
-                print("❌ No prompt provided")
-                return None
-
-            # Prepare parameters
+            # Default parameters optimized for H100 GPU - matching official generate.py
             if parameters is None:
-                parameters = {}
+                parameters = {
+                    "frame_num": 16,  # Standard frame count
+                    "sample_steps": 50,
+                    "sample_guide_scale": 7.5,
+                    "base_seed": int(time.time()) % 1000000,  # Random seed
+                    "width": 832,
+                    "height": 480,
+                    "use_prompt_extend": False,
+                }
 
-            # Map parameters to the expected format
-            mapped_params = self._map_parameters(parameters)
+            # Create unique output folder with model name
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            model_name = "wan2.1_t2v_14B_singleGPU"
+            
+            # Create model-specific output directory
+            model_output_dir = self.output_dir / model_name
+            output_folder = model_output_dir / f"generation_{timestamp}"
+            output_folder.mkdir(parents=True, exist_ok=True)
 
-            # Create generation parameters JSON
-            generation_params = {
-                "frame_num": mapped_params.get("frame_num", 16),
-                "sample_steps": mapped_params.get("sample_steps", 50),
-                "sample_guide_scale": mapped_params.get("sample_guide_scale", 7.5),
-                "base_seed": mapped_params.get("base_seed", 42),
-                "width": mapped_params.get("width", 832),
-                "height": mapped_params.get("height", 480),
-                "use_prompt_extend": mapped_params.get("use_prompt_extend", False),
+            print(f"🎬 Generating video with prompt: '{prompt}'")
+            print(f"📁 Output folder: {output_folder}")
+            print(f"🤖 Model: {model_name}")
+
+            # Prepare the request
+            request_data = {
+                "prompt": prompt,
+                "negative_prompt": negative_prompt,
+                "parameters": json.dumps(parameters),
+                "api_token": self.api_token,
+                "model_name": model_name,
             }
 
-            # Convert to JSON string
-            params_json = json.dumps(generation_params, indent=2)
+            # Save request metadata
+            if save_metadata:
+                metadata_file = output_folder / "request_metadata.json"
+                with open(metadata_file, "w") as f:
+                    json.dump(request_data, f, indent=2)
+                print(f"📄 Request metadata saved to: {metadata_file}")
 
-            print(f"🎬 Generating video with prompt: {prompt}")
-            print(f"📝 Negative prompt: {negative_prompt}")
-            print(f"⚙️ Parameters: {generation_params}")
+            # Try using gradio_client
+            try:
+                if self.client is None:
+                    raise RuntimeError("gradio_client is not available")
 
-            # Call the Gradio endpoint
-            result = self.client.predict(
-                prompt,  # str in 'Prompt' Textbox component
-                negative_prompt,  # str in 'Negative Prompt' Textbox component
-                params_json,  # str in 'Generation Parameters JSON' Textbox component
-                self.api_token,  # str in 'API Token (Optional)' Textbox component
-                api_name="/predict",
-            )
+                print("⏳ Sending request via gradio_client...")
+                # Map parameters to correct names
+                mapped_parameters = self._map_parameters(parameters)
 
-            print(f"📊 Generation result: {result}")
+                # Use gradio_client for prediction
+                result = self.client.predict(
+                    prompt,
+                    negative_prompt,
+                    json.dumps(mapped_parameters),
+                    self.api_token,
+                )
+
+                print("✅ Generation completed!")
+                print(f"📊 Result: {result}")
+
+            except Exception as e:
+                print(f"❌ gradio_client failed: {e}")
+                print("💡 Please ensure the server is running and API endpoints are exposed")
+                return None
 
             # Parse the result
+            video_path = None
+            status_message = ""
+            
+            print(f"🔍 Debug: Result type: {type(result)}")
+            print(f"🔍 Debug: Result: {result}")
+            
             if isinstance(result, tuple) and len(result) >= 2:
-                video_path = result[0]
-                status_message = result[1]
-
-                if video_path and os.path.exists(video_path):
-                    # Download the video file
-                    local_filename = f"wan2.1_14B_{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp4"
-                    local_path = self.output_dir / local_filename
-
-                    if self._download_file(video_path, local_path):
-                        print(f"✅ Video generated and saved to: {local_path}")
-
-                        # Save metadata if requested
-                        if save_metadata:
-                            metadata = {
-                                "prompt": prompt,
-                                "negative_prompt": negative_prompt,
-                                "parameters": generation_params,
-                                "generated_at": datetime.now().isoformat(),
-                                "source_video_path": video_path,
-                                "local_video_path": str(local_path),
-                                "model": "wan2.1_t2v_14B_singleGPU",
-                            }
-
-                            metadata_path = local_path.with_suffix(".json")
-                            with open(metadata_path, "w") as f:
-                                json.dump(metadata, f, indent=2)
-                            print(f"📄 Metadata saved to: {metadata_path}")
-
-                        return str(local_path)
-                    else:
-                        print("❌ Failed to download video file")
-                        return None
+                # Handle tuple format: (video_path, status_message)
+                first_element, status_message = result
+                
+                if isinstance(first_element, dict):
+                    # Handle tuple with dict: ({'video': path, 'subtitles': None}, status_message)
+                    video_path = first_element.get('video')
                 else:
-                    print(f"❌ Video generation failed: {status_message}")
+                    # Handle tuple format: (video_path, status_message)
+                    video_path = first_element
+                    
+            elif isinstance(result, dict):
+                # Handle dictionary format: {'video': path, 'subtitles': None}
+                video_path = result.get('video')
+                status_message = result.get('status', 'Video generated successfully')
+            else:
+                print(f"⚠️ Unexpected result format: {result}")
+                return None
+
+            print(f"🔍 Debug: Extracted video_path: {video_path}")
+            print(f"🔍 Debug: Extracted status_message: {status_message}")
+
+            # Save status message
+            status_file = output_folder / "status.txt"
+            with open(status_file, "w") as f:
+                f.write(status_message)
+
+            # Download video if it's a URL
+            if video_path and isinstance(video_path, str):
+                if video_path.startswith("http"):
+                    # Download the video
+                    local_video_path = output_folder / "generated_video.mp4"
+                    self._download_file(video_path, local_video_path)
+                    print(f"🎥 Video downloaded to: {local_video_path}")
+                    return str(local_video_path)
+                elif os.path.exists(video_path):
+                    # Copy the video if it's a local path
+                    local_video_path = output_folder / "generated_video.mp4"
+                    import shutil
+
+                    shutil.copy2(video_path, local_video_path)
+                    print(f"🎥 Video copied to: {local_video_path}")
+                    return str(local_video_path)
+                else:
+                    print(f"⚠️ Video path not found: {video_path}")
                     return None
             else:
-                print(f"❌ Unexpected result format: {result}")
+                print("⚠️ No video path in result")
                 return None
 
         except Exception as e:
-            print(f"❌ Error during video generation: {e}")
+            print(f"❌ Generation failed: {e}")
             return None
 
     def _map_parameters(self, parameters: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Map parameter names to the expected format.
+        """Map old parameter names to new ones for backward compatibility."""
+        mapped_params = parameters.copy()
 
-        Args:
-            parameters: Input parameters
+        # Map old parameter names to new ones
+        if "num_frames" in mapped_params and "frame_num" not in mapped_params:
+            mapped_params["frame_num"] = mapped_params.pop("num_frames")
 
-        Returns:
-            Mapped parameters
-        """
-        mapping = {
-            "num_frames": "frame_num",
-            "num_inference_steps": "sample_steps",
-            "guidance_scale": "sample_guide_scale",
-            "seed": "base_seed",
-        }
+        if "num_inference_steps" in mapped_params and "sample_steps" not in mapped_params:
+            mapped_params["sample_steps"] = mapped_params.pop("num_inference_steps")
 
-        mapped = {}
-        for key, value in parameters.items():
-            if key in mapping:
-                mapped[mapping[key]] = value
-            else:
-                mapped[key] = value
+        if "guidance_scale" in mapped_params and "sample_guide_scale" not in mapped_params:
+            mapped_params["sample_guide_scale"] = mapped_params.pop("guidance_scale")
 
-        return mapped
+        if "seed" in mapped_params and "base_seed" not in mapped_params:
+            mapped_params["base_seed"] = mapped_params.pop("seed")
+
+        # Remove unsupported parameters
+        unsupported_params = ["fps", "batch_size", "video_save_name"]
+        for param in unsupported_params:
+            if param in mapped_params:
+                del mapped_params[param]
+
+        return mapped_params
 
     def _download_file(self, url: str, local_path: Path) -> bool:
         """
@@ -299,34 +363,24 @@ class Wan2_1Client:
 
         Args:
             prompts: List of text prompts
-            negative_prompts: Optional list of negative prompts
-            parameters: Optional generation parameters
+            negative_prompts: List of negative prompts (optional)
+            parameters: Generation parameters (same for all)
 
         Returns:
-            List of generated video paths
+            List of paths to generated videos
         """
+        if negative_prompts is None:
+            negative_prompts = [""] * len(prompts)
+
         results = []
-        total = len(prompts)
-
-        for i, prompt in enumerate(prompts, 1):
-            print(f"🎬 Generating video {i}/{total}: {prompt}")
-
-            negative_prompt = ""
-            if negative_prompts and i <= len(negative_prompts):
-                negative_prompt = negative_prompts[i - 1]
-
-            result = self.generate_video(prompt, negative_prompt, parameters)
+        for i, (prompt, neg_prompt) in enumerate(zip(prompts, negative_prompts)):
+            print(f"\n--- Generating video {i+1}/{len(prompts)} ---")
+            result = self.generate_video(prompt, neg_prompt, parameters)
             results.append(result)
 
-            if result:
-                print(f"✅ Video {i} generated successfully")
-            else:
-                print(f"❌ Video {i} generation failed")
-
-            # Add delay between generations to avoid overwhelming the server
-            if i < total:
-                print("⏳ Waiting 5 seconds before next generation...")
-                time.sleep(5)
+            # Add delay between requests
+            if i < len(prompts) - 1:
+                time.sleep(2)
 
         return results
 
@@ -338,119 +392,99 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Basic usage with command-line token
-  python wan2.1_t2v_14B_singleGPU_client.py \\
-    --token "your_api_token" \\
-    --prompt "A beautiful sunset over the ocean"
+  # Basic usage with command line token
+  python wan2.1_t2v_14B_singleGPU_client.py --token "your_token" --prompt "A beautiful sunset"
 
-  # With custom parameters
-  python wan2.1_t2v_14B_singleGPU_client.py \\
-    --token "your_api_token" \\
-    --prompt "A beautiful sunset over the ocean" \\
-    --negative-prompt "blurry, low quality" \\
-    --parameters '{"frame_num": 16, "sample_steps": 50}'
+  # Usage with token from file (fallback)
+  python wan2.1_t2v_14B_singleGPU_client.py --prompt "A beautiful sunset"
 
   # Test connection only
-  python wan2.1_t2v_14B_singleGPU_client.py \\
-    --token "your_api_token" \\
-    --test-connection
-        """,
-    )
+  python wan2.1_t2v_14B_singleGPU_client.py --token "your_token" --test-connection
 
-    parser.add_argument(
-        "--token",
-        type=str,
-        help="API token for authentication (recommended)",
+  # With custom parameters
+  python wan2.1_t2v_14B_singleGPU_client.py --token "your_token" --prompt "A beautiful sunset" --parameters '{"frame_num": 16, "sample_steps": 50}'
+        """
     )
-    parser.add_argument(
-        "--token-file",
-        type=str,
-        default="api_token.txt",
-        help="File containing API token (fallback)",
-    )
-    parser.add_argument(
-        "--endpoint",
-        type=str,
-        default="http://localhost:8080",
-        help="Server endpoint URL",
-    )
-    parser.add_argument(
-        "--prompt",
-        type=str,
-        help="Text prompt for video generation",
-    )
-    parser.add_argument(
-        "--negative-prompt",
-        type=str,
-        default="",
-        help="Negative prompt to avoid elements",
-    )
-    parser.add_argument(
-        "--parameters",
-        type=str,
-        help="JSON string of generation parameters",
-    )
-    parser.add_argument(
-        "--output-dir",
-        type=str,
-        default="./results",
-        help="Output directory for results",
-    )
-    parser.add_argument(
-        "--test-connection",
-        action="store_true",
-        help="Test connection only",
-    )
+    parser.add_argument("--endpoint", default="http://localhost:8080", 
+                       help="Endpoint URL")
+    parser.add_argument("--token", 
+                       help="API token for authentication (recommended over file)")
+    parser.add_argument("--output-dir", default="./results", 
+                       help="Output directory for results")
+    parser.add_argument("--prompt", required=True, 
+                       help="Text prompt for video generation")
+    parser.add_argument("--negative-prompt", default="", 
+                       help="Negative prompt")
+    parser.add_argument("--parameters", 
+                       help="JSON string of generation parameters")
+    parser.add_argument("--test-connection", action="store_true", 
+                       help="Test connection only")
 
     args = parser.parse_args()
 
-    # Initialize client
-    client = Wan2_1Client(args.endpoint, "", args.output_dir)
-
-    # Load API token
+    # Load API token - prioritize command line argument
     api_token = args.token
     if not api_token:
-        if client.load_api_token(args.token_file):
-            api_token = client.api_token
-        else:
-            print("❌ No API token provided and token file not found")
-            print("💡 Use --token to provide API token or create api_token.txt file")
-            sys.exit(1)
+        print("ℹ️ No API token provided via --token argument")
+        print("💡 Trying to load from api_token.txt file...")
+        try:
+            token_path = Path("api_token.txt")
+            if token_path.exists():
+                with open(token_path, "r") as f:
+                    token_content = f.read().strip()
 
-    # Update client with API token
-    client.api_token = api_token
-    client.headers["Authorization"] = f"Bearer {api_token}"
+                # Skip lines that start with # (comments) and empty lines
+                token_lines = [line.strip() for line in token_content.split("\n") 
+                             if line.strip() and not line.startswith("#")]
 
-    # Test connection if requested
-    if args.test_connection:
-        if client.test_connection():
-            print("✅ Connection test successful!")
-            sys.exit(0)
-        else:
-            print("❌ Connection test failed!")
-            sys.exit(1)
+                if token_lines:
+                    api_token = token_lines[0]
+                    # Check if the token looks like a placeholder
+                    if api_token in ["your_api_token_here", 
+                                   "your_api_token_here_12345"]:
+                        print("❌ API token appears to be a placeholder")
+                        print("Please replace 'your_api_token_here' with your actual API token")
+                        api_token = ""
+                    else:
+                        print(f"✅ API token loaded from file: {api_token[:10]}...")
+                else:
+                    print("❌ API token file is empty or contains only comments")
+            else:
+                print("⚠️ API token file not found: api_token.txt")
+                print("💡 You can provide the token via --token argument or create api_token.txt")
+        except Exception as e:
+            print(f"⚠️ Error loading API token from file: {e}")
+    else:
+        print(f"✅ API token provided via command line: {api_token[:10]}...")
 
-    # Check if prompt is provided
-    if not args.prompt:
-        print("❌ No prompt provided")
-        print("💡 Use --prompt to specify a text prompt")
+    # Initialize client with API token
+    client = Wan2_1Client(args.endpoint, api_token=api_token, 
+                          output_dir=args.output_dir)
+
+    # Test connection
+    if not client.test_connection():
+        print("❌ Failed to connect to endpoint")
         sys.exit(1)
 
-    # Parse parameters if provided
+    if args.test_connection:
+        print("✅ Connection test successful!")
+        return
+
+    # Parse parameters
     parameters = None
     if args.parameters:
         try:
             parameters = json.loads(args.parameters)
         except json.JSONDecodeError as e:
-            print(f"❌ Invalid JSON in parameters: {e}")
+            print(f"❌ Invalid parameters JSON: {e}")
             sys.exit(1)
 
     # Generate video
-    result = client.generate_video(args.prompt, args.negative_prompt, parameters)
+    result = client.generate_video(args.prompt, args.negative_prompt, 
+                                 parameters)
 
     if result:
         print(f"✅ Video generated successfully: {result}")
-        sys.exit(0)
     else:
         print("❌ Video generation failed")
         sys.exit(1)
