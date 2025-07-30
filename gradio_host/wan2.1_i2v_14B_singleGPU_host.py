@@ -83,7 +83,7 @@ def create_gradio_interface(checkpoint_dir, output_dir):
             output_folder = os.path.join(model_output_dir, f"generation_{timestamp}_{random_generation_id}")
             os.makedirs(output_folder, exist_ok=True)
 
-            # Save input image
+            # Save input image (expects PIL Image object from gradio_client)
             input_image_path = os.path.join(output_folder, "input_image.jpg")
             input_image.save(input_image_path)
 

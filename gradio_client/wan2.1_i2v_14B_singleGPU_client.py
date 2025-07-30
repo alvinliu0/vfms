@@ -214,13 +214,13 @@ class Wan2_1Client:
             print(f"📁 Output folder: {output_folder}")
             print(f"🤖 Model: {model_name}")
 
-            # Prepare the request
+            # Prepare the request metadata (without file objects)
             request_data = {
                 "prompt": prompt,
                 "negative_prompt": negative_prompt,
                 "image_path": image_path,
-                "parameters": json.dumps(parameters),
-                "api_token": self.api_token,
+                "parameters": parameters,  # Keep as dict, not JSON string
+                "api_token": self.api_token[:10] + "..." if self.api_token else "",  # Don't save full token
                 "model_name": model_name,
             }
 
@@ -240,16 +240,20 @@ class Wan2_1Client:
                 # Map parameters to correct names
                 mapped_parameters = self._map_parameters(parameters)
 
-                # Use gradio_client for prediction
-                # For i2v, we need to pass the image file, not just the path
-                with open(image_path, 'rb') as image_file:
-                    result = self.client.predict(
-                        prompt,
-                        negative_prompt,
-                        image_file,  # Pass image file object
-                        json.dumps(mapped_parameters),
-                        self.api_token,
-                    )
+                # Use gradio_client with PIL Image object (same pattern as original Wan2.1)
+                from PIL import Image
+                
+                # Load image as PIL Image object (this is what the server expects)
+                pil_image = Image.open(image_path)
+                
+                # Use gradio_client.predict with 5 parameters matching server signature
+                result = self.client.predict(
+                    prompt,  # 1st parameter: prompt
+                    negative_prompt,  # 2nd parameter: negative_prompt
+                    pil_image,  # 3rd parameter: input_image (PIL Image object)
+                    json.dumps(mapped_parameters),  # 4th parameter: input_text
+                    self.api_token,  # 5th parameter: api_token
+                )
 
                 print("✅ Generation completed!")
                 print(f"📊 Result: {result}")
