@@ -358,8 +358,6 @@ if __name__ == "__main__":
     demo = create_gradio_interface(checkpoint_dir, output_dir)
     
     # Launch settings
-    concurrency_limit = int(os.environ.get("GRADIO_CONCURRENCY_LIMIT", 1))
-    max_queue_size = int(os.environ.get("GRADIO_MAX_QUEUE_SIZE", 20))
     server_name = os.environ.get("GRADIO_SERVER_NAME", "0.0.0.0")
     server_port = int(os.environ.get("GRADIO_SERVER_PORT", 8080))
     
@@ -371,15 +369,11 @@ if __name__ == "__main__":
     print(f"📁 Checkpoint directory: {checkpoint_dir}")
     print(f"📁 Output directory: {output_dir}")
     print(f"🌐 Server: {server_name}:{server_port}")
-    print(f"🔒 Concurrency limit: {concurrency_limit}")
     
     demo.launch(
         server_name=server_name,
         server_port=server_port,
-        concurrency_limit=concurrency_limit,
-        max_queue_size=max_queue_size,
         allowed_paths=allowed_paths,
-        save_dir=save_dir,
         show_error=True,
         quiet=False
     ) 
