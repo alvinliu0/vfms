@@ -12,6 +12,10 @@ A script that handles CLI arguments for basic inputs (API token, endpoint, gener
 
 A script that handles CLI arguments for basic inputs (API token, endpoint, generation parameters) and calls the client's `generate_video` or `batch_generate` method for video generation using the 14B model. Supports both single and batch generation modes.
 
+### `scripts/wan2.1_i2v_14B_singleGPU/generate.py`
+
+A script that handles CLI arguments for basic inputs (API token, endpoint, generation parameters, image path) and calls the client's `generate_video` or `batch_generate` method for image-to-video generation using the 14B model. Supports both single and batch generation modes.
+
 #### Features
 
 - **CLI Argument Handling**: Parses basic inputs (API token, endpoint, generation args)
@@ -67,6 +71,9 @@ python example/scripts/wan2.1_t2v_1.3B_singleGPU/generate.py --token "your_token
 # Single generation with required arguments (14B model)
 python example/scripts/wan2.1_t2v_14B_singleGPU/generate.py --token "your_token" --endpoint "your_endpoint" --prompt "A beautiful sunset"
 
+# Single generation with required arguments (i2v 14B model)
+python example/scripts/wan2.1_i2v_14B_singleGPU/generate.py --token "your_token" --endpoint "your_endpoint" --prompt "A beautiful sunset" --image input.jpg
+
 # Batch generation with multiple prompts (comma-separated) - 1.3B model
 python example/scripts/wan2.1_t2v_1.3B_singleGPU/generate.py --token "your_token" --endpoint "your_endpoint" --batch-prompts "A beautiful sunset,A stormy night,A peaceful morning"
 
@@ -76,8 +83,14 @@ python example/scripts/wan2.1_t2v_1.3B_singleGPU/generate.py --token "your_token
 # Test connection only (1.3B model)
 python example/scripts/wan2.1_t2v_1.3B_singleGPU/generate.py --token "your_token" --endpoint "your_endpoint" --test-connection
 
+# Test connection only (i2v 14B model)
+python example/scripts/wan2.1_i2v_14B_singleGPU/generate.py --token "your_token" --endpoint "your_endpoint" --test-connection
+
 # With custom parameters (1.3B model)
 python example/scripts/wan2.1_t2v_1.3B_singleGPU/generate.py --token "your_token" --endpoint "your_endpoint" --prompt "A beautiful sunset" --frame-num 24 --sample-steps 75 --width 1024 --height 576
+
+# With custom parameters (i2v 14B model)
+python example/scripts/wan2.1_i2v_14B_singleGPU/generate.py --token "your_token" --endpoint "your_endpoint" --prompt "A beautiful sunset" --image input.jpg --frame-num 81 --sample-steps 40 --width 832 --height 480
 ```
 
 #### Security Benefits

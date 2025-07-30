@@ -1,0 +1,5 @@
+input_images/sunset.jpg
+input_images/mountain.jpg
+input_images/city.jpg
+input_images/forest.jpg
+input_images/castle.jpg 
