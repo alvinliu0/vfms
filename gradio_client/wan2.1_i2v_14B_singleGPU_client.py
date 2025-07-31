@@ -240,36 +240,19 @@ class Wan2_1Client:
                 # Map parameters to correct names
                 mapped_parameters = self._map_parameters(parameters)
 
-                # Use gradio_client with the correct function name and ImageData format
+                # Use gradio_client with PIL Image object (as expected by gr.Image type="pil")
                 from PIL import Image
-                import base64
-                import io
                 
-                # Convert image to base64 for ImageData format
+                # Load image as PIL Image object
                 pil_image = Image.open(image_path)
-                img_buffer = io.BytesIO()
-                pil_image.save(img_buffer, format='JPEG')
-                img_str = base64.b64encode(img_buffer.getvalue()).decode()
                 
-                # Create ImageData object as expected by the API
-                image_data = {
-                    "path": image_path,
-                    "url": f"data:image/jpeg;base64,{img_str}",
-                    "size": len(img_buffer.getvalue()),
-                    "orig_name": os.path.basename(image_path),
-                    "mime_type": "image/jpeg",
-                    "is_stream": False,
-                    "meta": {"_type": "gradio.FileData"}
-                }
-                
-                # Use the correct function name
+                # Use the default predict endpoint (no api_name needed for gr.Blocks)
                 result = self.client.predict(
                     prompt,  # 1st parameter: prompt
                     negative_prompt,  # 2nd parameter: negative_prompt
-                    image_data,  # 3rd parameter: ImageData object
+                    pil_image,  # 3rd parameter: PIL Image object
                     json.dumps(mapped_parameters),  # 4th parameter: input_text
                     self.api_token,  # 5th parameter: api_token
-                    api_name="/_infer"  # Use the correct function name
                 )
 
                 print("✅ Generation completed!")

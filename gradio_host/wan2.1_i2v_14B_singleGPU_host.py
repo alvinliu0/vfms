@@ -241,104 +241,49 @@ def create_gradio_interface(checkpoint_dir, output_dir):
             error_msg += f"Traceback: {traceback.format_exc()}"
             return None, error_msg
 
-    # Create Gradio interface
-    with gr.Blocks(title="Wan2.1: Image-to-Video Generation (14B Model)") as demo:
-        gr.Markdown("# 🎬 Wan2.1 Image-to-Video Generation (14B Model)")
-        gr.Markdown("Generate videos from images using the Wan2.1 14B model.")
-
-        with gr.Row():
-            with gr.Column(scale=1):
-                # Input components
-                prompt_input = gr.Textbox(
-                    label="📝 Text Prompt",
-                    placeholder="Describe the video you want to generate from the image...",
-                    lines=3,
-                    max_lines=5
-                )
-                
-                negative_prompt_input = gr.Textbox(
-                    label="🚫 Negative Prompt",
-                    placeholder="Describe what you don't want in the video...",
-                    lines=2,
-                    max_lines=3
-                )
-                
-                image_input = gr.Image(
-                    label="🖼️ Input Image",
-                    type="pil",
-                    height=300
-                )
-                
-                api_token_input = gr.Textbox(
-                    label="🔑 API Token (Optional)",
-                    type="password",
-                    placeholder="Enter your API token here..."
-                )
-
-            with gr.Column(scale=1):
-                # Configuration
-                config_input = gr.Textbox(
-                    label="⚙️ Generation Parameters (JSON)",
-                    placeholder='{"frame_num": 81, "sample_steps": 40, "sample_guide_scale": 5.0, "base_seed": 42}',
-                    lines=8,
-                    max_lines=10,
-                    value=json.dumps({
+    # Define the gradio interface (UI/API) - using gr.Interface to expose API endpoints
+    interface = gr.Interface(
+        fn=_infer,
+        inputs=[
+            gr.Textbox(label="Prompt", lines=3, placeholder="A beautiful sunset over the ocean, cinematic lighting, 4K quality"),
+            gr.Textbox(label="Negative Prompt", lines=2, placeholder="blurry, low quality, distorted, ugly"),
+            gr.Image(label="Input Image", type="pil", height=300),
+            gr.Textbox(
+                label="Generation Parameters JSON",
+                lines=10,
+                placeholder=json.dumps(
+                    {
                         "frame_num": 81,
                         "sample_steps": 40,
                         "sample_guide_scale": 5.0,
                         "base_seed": 42,
                         "checkpoint": "480p",
-                        "use_prompt_extend": False
-                    }, indent=2)
-                )
+                        "use_prompt_extend": False,
+                    },
+                    indent=2,
+                ),
+            ),
+            gr.Textbox(label="API Token (Optional)", type="password", placeholder="Enter your API token here..."),
+        ],
+        outputs=[gr.Video(label="Generated Video", height=500), gr.Textbox(label="Output", lines=10)],
+        title="Wan2.1: Image-to-Video Generation (14B Model)",
+        description="Generate videos from images using the Wan2.1 14B model. GPU: H100 (80GB) - Optimized for fast generation",
+        theme=gr.themes.Soft(),
+    )
 
-        # Generate button
-        generate_btn = gr.Button("🚀 Generate Video", variant="primary", size="lg")
+    # Configure queue settings
+    concurrency_limit = int(os.environ.get("GRADIO_CONCURRENCY_LIMIT", 1))
+    max_queue_size = int(os.environ.get("GRADIO_MAX_QUEUE_SIZE", 20))
+    try:
+        status_update_rate = float(os.environ.get("GRADIO_STATUS_UPDATE_RATE", 1.0))
+    except ValueError:
+        status_update_rate = "auto"
 
-        # Output components
-        with gr.Row():
-            video_output = gr.Video(
-                label="🎥 Generated Video",
-                height=400
-            )
-            
-            status_output = gr.Textbox(
-                label="📊 Status",
-                lines=5,
-                max_lines=10,
-                interactive=False
-            )
+    print(f"Configuring queue with {concurrency_limit=} {max_queue_size=} {status_update_rate=}")
 
-        # Event handlers
-        generate_btn.click(
-            fn=_infer,
-            inputs=[prompt_input, negative_prompt_input, image_input, config_input, api_token_input],
-            outputs=[video_output, status_output]
-        )
-
-        # Add some helpful information
-        gr.Markdown("""
-        ### 📋 Usage Instructions:
-        1. **Upload an image** that you want to animate
-        2. **Enter a text prompt** describing the desired video
-        3. **Optionally add a negative prompt** to avoid unwanted elements
-        4. **Configure generation parameters** (or use defaults)
-        5. **Click Generate** to create your video
-
-        ### ⚙️ Default Parameters:
-        - **Frames**: 81 (4n+1 format for optimal generation)
-        - **Steps**: 40 (diffusion sampling steps)
-        - **Guidance Scale**: 5.0 (prompt adherence vs creativity)
-        - **Seed**: 42 (for reproducible results)
-
-        ### 💡 Tips:
-        - Higher frame counts create longer videos
-        - More sampling steps improve quality but take longer
-        - Higher guidance scale makes the video follow the prompt more closely
-        - Use negative prompts to avoid unwanted elements
-        """)
-
-    return demo
+    return interface.queue(
+        max_size=max_queue_size,
+    )
 
 
 if __name__ == "__main__":
@@ -350,7 +295,7 @@ if __name__ == "__main__":
     os.makedirs(output_dir, exist_ok=True)
     
     # Create and launch the interface
-    demo = create_gradio_interface(checkpoint_dir, output_dir)
+    interface = create_gradio_interface(checkpoint_dir, output_dir)
     
     # Launch settings
     server_name = os.environ.get("GRADIO_SERVER_NAME", "0.0.0.0")
@@ -365,7 +310,7 @@ if __name__ == "__main__":
     print(f"📁 Output directory: {output_dir}")
     print(f"🌐 Server: {server_name}:{server_port}")
     
-    demo.launch(
+    interface.launch(
         server_name=server_name,
         server_port=server_port,
         allowed_paths=allowed_paths,
