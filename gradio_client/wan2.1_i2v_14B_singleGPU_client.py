@@ -240,19 +240,13 @@ class Wan2_1Client:
                 # Map parameters to correct names
                 mapped_parameters = self._map_parameters(parameters)
 
-                # Use gradio_client with PIL Image object (same pattern as original Wan2.1)
-                from PIL import Image
-                
-                # Load image as PIL Image object (this is what the server expects)
-                pil_image = Image.open(image_path)
-                
-                # Use gradio_client.predict with 5 parameters matching server signature
+                # Use gradio_client for prediction (i2v pattern with image)
                 result = self.client.predict(
-                    prompt,  # 1st parameter: prompt
-                    negative_prompt,  # 2nd parameter: negative_prompt
-                    pil_image,  # 3rd parameter: input_image (PIL Image object)
-                    json.dumps(mapped_parameters),  # 4th parameter: input_text
-                    self.api_token,  # 5th parameter: api_token
+                    prompt,
+                    negative_prompt,
+                    image_path,  # Add image parameter
+                    json.dumps(mapped_parameters),
+                    self.api_token,
                 )
 
                 print("✅ Generation completed!")

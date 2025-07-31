@@ -83,31 +83,16 @@ def create_gradio_interface(checkpoint_dir, output_dir):
             output_folder = os.path.join(model_output_dir, f"generation_{timestamp}_{random_generation_id}")
             os.makedirs(output_folder, exist_ok=True)
 
-            # Save input image (expects PIL Image object from gradio_client)
+            # Handle input image
             input_image_path = os.path.join(output_folder, "input_image.jpg")
             input_image.save(input_image_path)
 
-            # Get checkpoint choice from user input
-            checkpoint_choice = input_json.get("checkpoint", "480p")
-            
-            # Select checkpoint based on user choice
-            if checkpoint_choice == "480p":
-                selected_checkpoint = os.path.join(project_root, "Wan2.1", "Wan2.1-I2V-14B-480P")
-                print(f"🤖 Using 480P checkpoint as specified by user")
-            elif checkpoint_choice == "720p":
-                selected_checkpoint = os.path.join(project_root, "Wan2.1", "Wan2.1-I2V-14B-720P")
-                print(f"🤖 Using 720P checkpoint as specified by user")
-            else:
-                # Fallback to 480P for unknown choices
-                selected_checkpoint = os.path.join(project_root, "Wan2.1", "Wan2.1-I2V-14B-480P")
-                print(f"⚠️ Unknown checkpoint choice '{checkpoint_choice}', using 480P as fallback")
-            
             # Set generation parameters
             generation_params = {
                 "prompt": prompt,
                 "negative_prompt": negative_prompt,
                 "input_image": input_image_path,
-                "checkpoint_dir": selected_checkpoint,
+                "checkpoint_dir": checkpoint_dir,
                 "output_folder": output_folder,
                 "video_save_name": "output",
                 "model_name": model_name,
@@ -137,13 +122,13 @@ def create_gradio_interface(checkpoint_dir, output_dir):
                 "python",
                 generate_py_path,
                 "--task",
-                "i2v-14B",
+                "i2v-14B",  # Updated for i2v 14B model
                 "--prompt",
                 prompt,
                 "--image",
                 input_image_path,
                 "--ckpt_dir",
-                selected_checkpoint,  # Use the automatically selected checkpoint
+                checkpoint_dir,
                 "--save_file",
                 os.path.join(output_folder, "output.mp4"),  # Add .mp4 extension
                 "--offload_model",
