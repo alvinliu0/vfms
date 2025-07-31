@@ -240,53 +240,37 @@ class Wan2_1Client:
                 # Map parameters to correct names
                 mapped_parameters = self._map_parameters(parameters)
 
-                # Use direct HTTP requests to bypass gradio_client image limitations
-                # This approach mimics how the original Wan2.1 implementation works
-                import requests
+                # Use gradio_client with the correct function name and ImageData format
                 from PIL import Image
                 import base64
                 import io
                 
-                # Convert image to base64 for HTTP transmission
+                # Convert image to base64 for ImageData format
                 pil_image = Image.open(image_path)
                 img_buffer = io.BytesIO()
                 pil_image.save(img_buffer, format='JPEG')
                 img_str = base64.b64encode(img_buffer.getvalue()).decode()
                 
-                # Prepare the request data in the correct Gradio API format
-                request_data = {
-                    "fn_index": 0,  # Function index for the main inference function
-                    "data": [
-                        prompt,  # 1st parameter: prompt
-                        negative_prompt,  # 2nd parameter: negative_prompt
-                        f"data:image/jpeg;base64,{img_str}",  # 3rd parameter: base64 image
-                        json.dumps(mapped_parameters),  # 4th parameter: input_text
-                        self.api_token,  # 5th parameter: api_token
-                    ]
+                # Create ImageData object as expected by the API
+                image_data = {
+                    "path": image_path,
+                    "url": f"data:image/jpeg;base64,{img_str}",
+                    "size": len(img_buffer.getvalue()),
+                    "orig_name": os.path.basename(image_path),
+                    "mime_type": "image/jpeg",
+                    "is_stream": False,
+                    "meta": {"_type": "gradio.FileData"}
                 }
                 
-                # Send HTTP POST request to the Gradio API
-                response = requests.post(
-                    f"{self.endpoint_url}/run/predict",
-                    json=request_data,
-                    headers=self.headers,
-                    timeout=7200  # 2 hours timeout for generation
+                # Use the correct function name
+                result = self.client.predict(
+                    prompt,  # 1st parameter: prompt
+                    negative_prompt,  # 2nd parameter: negative_prompt
+                    image_data,  # 3rd parameter: ImageData object
+                    json.dumps(mapped_parameters),  # 4th parameter: input_text
+                    self.api_token,  # 5th parameter: api_token
+                    api_name="/_infer"  # Use the correct function name
                 )
-                
-                if response.status_code != 200:
-                    raise RuntimeError(f"HTTP {response.status_code}: {response.text}")
-                
-                # Parse the response
-                result_data = response.json()
-                result = result_data.get("data", [])
-                
-                # Extract the video path and status from the result
-                if len(result) >= 2:
-                    video_path = result[0]  # First element is video path
-                    status_message = result[1]  # Second element is status message
-                    result = (video_path, status_message)
-                else:
-                    result = result[0] if result else None
 
                 print("✅ Generation completed!")
                 print(f"📊 Result: {result}")

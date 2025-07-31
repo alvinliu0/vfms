@@ -110,12 +110,25 @@ def create_gradio_interface(checkpoint_dir, output_dir):
                 # It's a PIL Image object, save it
                 input_image.save(input_image_path)
 
+            # Determine checkpoint directory based on checkpoint parameter
+            checkpoint_choice = input_json.get("checkpoint", "480p")
+            if checkpoint_choice == "480p":
+                actual_checkpoint_dir = "./Wan2.1-I2V-14B-480P"
+            elif checkpoint_choice == "720p":
+                actual_checkpoint_dir = "./Wan2.1-I2V-14B-720P"
+            else:
+                # Fallback to default
+                actual_checkpoint_dir = checkpoint_dir
+                print(f"⚠️ Unknown checkpoint choice '{checkpoint_choice}', using default: {checkpoint_dir}")
+            
+            print(f"🔧 Using checkpoint directory: {actual_checkpoint_dir}")
+            
             # Set generation parameters
             generation_params = {
                 "prompt": prompt,
                 "negative_prompt": negative_prompt,
                 "input_image": input_image_path,
-                "checkpoint_dir": checkpoint_dir,
+                "checkpoint_dir": actual_checkpoint_dir,
                 "output_folder": output_folder,
                 "video_save_name": "output",
                 "model_name": model_name,
@@ -151,7 +164,7 @@ def create_gradio_interface(checkpoint_dir, output_dir):
                 "--image",
                 input_image_path,
                 "--ckpt_dir",
-                checkpoint_dir,
+                actual_checkpoint_dir,  # Use the determined checkpoint directory
                 "--save_file",
                 os.path.join(output_folder, "output.mp4"),  # Add .mp4 extension
                 "--offload_model",
@@ -301,6 +314,7 @@ def create_gradio_interface(checkpoint_dir, output_dir):
                         "sample_steps": 40,
                         "sample_guide_scale": 5.0,
                         "base_seed": 42,
+                        "checkpoint": "480p",
                         "use_prompt_extend": False
                     }, indent=2)
                 )
