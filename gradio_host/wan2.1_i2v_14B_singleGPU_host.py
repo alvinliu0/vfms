@@ -179,16 +179,25 @@ def create_gradio_interface(checkpoint_dir, output_dir):
 
             print(f"Running Wan2.1 i2v generation with command: {' '.join(cmd_args)}")
 
-            # Run the generation with H100 GPU optimization
+            # Clear GPU memory before generation to prevent allocation issues
+            try:
+                import torch
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                    print("🧹 GPU memory cache cleared")
+            except Exception as e:
+                print(f"⚠️ Could not clear GPU cache: {e}")
+
+            # Run the generation with optimized GPU memory management
             env = os.environ.copy()
             env["PYTHONPATH"] = wan2_1_dir
-            env["CUDA_VISIBLE_DEVICES"] = "0"  # Use primary H100 GPU
-            env["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:2048"  # Larger chunks for H100
-            env["CUDA_LAUNCH_BLOCKING"] = "0"  # Non-blocking CUDA operations
-            env["TORCH_CUDNN_V8_API_ENABLED"] = "1"  # Enable cuDNN v8 for H100
+            env["CUDA_VISIBLE_DEVICES"] = "0"  # Use primary GPU
+            env["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:1024,expandable_segments:True"  # Better memory management
+            env["CUDA_LAUNCH_BLOCKING"] = "1"  # Blocking CUDA operations for better error reporting
+            env["TORCH_CUDNN_V8_API_ENABLED"] = "1"  # Enable cuDNN v8
             env["NVIDIA_TF32_OVERRIDE"] = "1"  # Enable TF32 for faster computation
-            env["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:2048,expandable_segments:True"  # Better memory management
             env["CUDA_DEVICE_MAX_CONNECTIONS"] = "1"  # Reduce GPU memory fragmentation
+            env["PYTORCH_NO_CUDA_MEMORY_CACHING"] = "1"  # Disable memory caching to prevent allocation issues
 
             result = subprocess.run(
                 cmd_args,

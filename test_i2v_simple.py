@@ -50,7 +50,7 @@ def test_i2v_generation(client):
     
     # Use parameters matching the official Wan example
     parameters = {
-        "checkpoint": "720p",  # Use 720p to match official example
+        "checkpoint": "480p",  # Use 480p to save time instead of 720p
     }
     
     result = client.generate_video(prompt, image_path, "", parameters)
