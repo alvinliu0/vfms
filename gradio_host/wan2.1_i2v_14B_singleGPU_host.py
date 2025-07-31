@@ -154,65 +154,28 @@ def create_gradio_interface(checkpoint_dir, output_dir):
             wan2_1_dir = os.path.join(project_root, "Wan2.1")
             generate_py_path = os.path.join(wan2_1_dir, "generate.py")
             
+            # Build command line arguments for generate.py (following official Wan example)
             cmd_args = [
                 "python",
                 generate_py_path,
                 "--task",
-                "i2v-14B",  # Updated for i2v 14B model
-                "--prompt",
-                prompt,
+                "i2v-14B",
+                "--size",
+                "1280*720" if checkpoint_choice == "720p" else "832*480",  # Match checkpoint resolution
+                "--ckpt_dir",
+                actual_checkpoint_dir,
                 "--image",
                 input_image_path,
-                "--ckpt_dir",
-                actual_checkpoint_dir,  # Use the determined checkpoint directory
+                "--prompt",
+                prompt,
                 "--save_file",
-                os.path.join(output_folder, "output.mp4"),  # Add .mp4 extension
-                "--offload_model",
-                "False",  # Keep model on GPU for faster generation
-                "--sample_shift",
-                "5.0",  # Default shift parameter
-                "--sample_solver",
-                "unipc",  # Default solver
+                os.path.join(output_folder, "output.mp4"),
             ]
 
-            # Note: generate.py doesn't support --negative_prompt argument
-            # Negative prompts are handled internally by the model using default values
-            # The negative prompt is written to file for reference but not passed to generate.py
-
-            # Add additional parameters from JSON with correct mapping
-            if "frame_num" in input_json:
-                cmd_args.extend(["--frame_num", str(input_json["frame_num"])])
-            elif "num_frames" in input_json:
-                cmd_args.extend(["--frame_num", str(input_json["num_frames"])])
-
-            if "sample_steps" in input_json:
-                cmd_args.extend(["--sample_steps", str(input_json["sample_steps"])])
-            elif "num_inference_steps" in input_json:
-                cmd_args.extend(["--sample_steps", str(input_json["num_inference_steps"])])
-
-            if "sample_guide_scale" in input_json:
-                cmd_args.extend(["--sample_guide_scale", str(input_json["sample_guide_scale"])])
-            elif "guidance_scale" in input_json:
-                cmd_args.extend(["--sample_guide_scale", str(input_json["guidance_scale"])])
-
-            if "base_seed" in input_json:
-                cmd_args.extend(["--base_seed", str(input_json["base_seed"])])
-            elif "seed" in input_json:
-                cmd_args.extend(["--base_seed", str(input_json["seed"])])
-
-            if "width" in input_json and "height" in input_json:
-                cmd_args.extend(["--size", f"{input_json['width']}*{input_json['height']}"])
-
-            # Keep model on GPU for fast generation (no offloading)
-            # cmd_args.extend(["--offload_model", "True", "--t5_cpu"])  # Commented out to use GPU
-
-            # Add GPU optimization flags for faster generation with H100
-            # Note: generate.py doesn't support --device, --batch_size, --num_workers
-            # GPU device is automatically detected by PyTorch
-
-            # Add prompt extension if specified
-            if input_json.get("use_prompt_extend", False):
-                cmd_args.append("--use_prompt_extend")
+            # Note: Following the official Wan example, we use minimal parameters
+            # The model will use its default values for other parameters
+            # Additional parameters from JSON are logged but not passed to generate.py
+            print(f"📝 Additional parameters (not used): {input_json}")
 
             print(f"Running Wan2.1 i2v generation with command: {' '.join(cmd_args)}")
 
@@ -229,10 +192,11 @@ def create_gradio_interface(checkpoint_dir, output_dir):
 
             result = subprocess.run(
                 cmd_args,
-                stdout=sys.stdout,     
-                stderr=sys.stderr,
+                stdout=subprocess.PIPE,     
+                stderr=subprocess.PIPE,
                 cwd=wan2_1_dir,  # Set working directory to Wan2.1
                 env=env,
+                text=True,  # Return strings instead of bytes
             )
 
             # Always log the output for debugging

@@ -48,12 +48,9 @@ def test_i2v_generation(client):
     print(f"🖼️ Image: {image_path}")
     print(f"📝 Prompt: {prompt}")
     
-    # Use minimal parameters for quick test
+    # Use parameters matching the official Wan example
     parameters = {
-        "frame_num": 17,  # Small frame count for quick test
-        "sample_steps": 20,  # Fewer steps for quick test
-        "sample_guide_scale": 5.0,
-        "base_seed": 42,
+        "checkpoint": "720p",  # Use 720p to match official example
     }
     
     result = client.generate_video(prompt, image_path, "", parameters)
