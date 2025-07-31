@@ -11,7 +11,15 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent / "gradio_client"))
 
 try:
-    from wan2_1_i2v_14B_singleGPU_client import Wan2_1Client
+    # Import using importlib to handle the dots in filename
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "wan2_1_i2v_14B_singleGPU_client",
+        Path(__file__).parent / "gradio_client" / "wan2.1_i2v_14B_singleGPU_client.py"
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    Wan2_1Client = module.Wan2_1Client
 except ImportError as e:
     print(f"❌ Import error: {e}")
     print("💡 Make sure the client file exists in gradio_client/")

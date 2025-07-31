@@ -240,14 +240,53 @@ class Wan2_1Client:
                 # Map parameters to correct names
                 mapped_parameters = self._map_parameters(parameters)
 
-                # Use gradio_client for prediction (i2v pattern with image)
-                result = self.client.predict(
-                    prompt,
-                    negative_prompt,
-                    image_path,  # Add image parameter
-                    json.dumps(mapped_parameters),
-                    self.api_token,
+                # Use direct HTTP requests to bypass gradio_client image limitations
+                # This approach mimics how the original Wan2.1 implementation works
+                import requests
+                from PIL import Image
+                import base64
+                import io
+                
+                # Convert image to base64 for HTTP transmission
+                pil_image = Image.open(image_path)
+                img_buffer = io.BytesIO()
+                pil_image.save(img_buffer, format='JPEG')
+                img_str = base64.b64encode(img_buffer.getvalue()).decode()
+                
+                # Prepare the request data in the correct Gradio API format
+                request_data = {
+                    "fn_index": 0,  # Function index for the main inference function
+                    "data": [
+                        prompt,  # 1st parameter: prompt
+                        negative_prompt,  # 2nd parameter: negative_prompt
+                        f"data:image/jpeg;base64,{img_str}",  # 3rd parameter: base64 image
+                        json.dumps(mapped_parameters),  # 4th parameter: input_text
+                        self.api_token,  # 5th parameter: api_token
+                    ]
+                }
+                
+                # Send HTTP POST request to the Gradio API
+                response = requests.post(
+                    f"{self.endpoint_url}/run/predict",
+                    json=request_data,
+                    headers=self.headers,
+                    timeout=7200  # 2 hours timeout for generation
                 )
+                
+                if response.status_code != 200:
+                    raise RuntimeError(f"HTTP {response.status_code}: {response.text}")
+                
+                # Parse the response
+                result_data = response.json()
+                result = result_data.get("data", [])
+                
+                # Extract the video path and status from the result
+                if len(result) >= 2:
+                    video_path = result[0]  # First element is video path
+                    status_message = result[1]  # Second element is status message
+                    result = (video_path, status_message)
+                else:
+                    result = result[0] if result else None
 
                 print("✅ Generation completed!")
                 print(f"📊 Result: {result}")

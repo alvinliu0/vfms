@@ -83,9 +83,32 @@ def create_gradio_interface(checkpoint_dir, output_dir):
             output_folder = os.path.join(model_output_dir, f"generation_{timestamp}_{random_generation_id}")
             os.makedirs(output_folder, exist_ok=True)
 
-            # Handle input image
+            # Handle input image - it could be a PIL Image object or base64 data
             input_image_path = os.path.join(output_folder, "input_image.jpg")
-            input_image.save(input_image_path)
+            
+            # Check if input_image is a base64 string
+            if isinstance(input_image, str) and input_image.startswith("data:image"):
+                # Convert base64 to PIL Image
+                import base64
+                import io
+                from PIL import Image
+                
+                # Extract base64 data from data URL
+                if input_image.startswith("data:image/jpeg;base64,"):
+                    base64_data = input_image.replace("data:image/jpeg;base64,", "")
+                elif input_image.startswith("data:image/png;base64,"):
+                    base64_data = input_image.replace("data:image/png;base64,", "")
+                else:
+                    raise ValueError("Unsupported image format. Only JPEG and PNG are supported.")
+                
+                # Decode base64 and create PIL Image
+                image_data = base64.b64decode(base64_data)
+                pil_image = Image.open(io.BytesIO(image_data))
+                pil_image.save(input_image_path)
+                
+            else:
+                # It's a PIL Image object, save it
+                input_image.save(input_image_path)
 
             # Set generation parameters
             generation_params = {
