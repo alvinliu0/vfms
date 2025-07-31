@@ -83,15 +83,19 @@ def create_gradio_interface(checkpoint_dir, output_dir):
             output_folder = os.path.join(model_output_dir, f"generation_{timestamp}_{random_generation_id}")
             os.makedirs(output_folder, exist_ok=True)
 
-            # Handle input image - it could be a PIL Image object or base64 data
+            # Handle input image - support multiple formats: PIL Image, base64, file path
             input_image_path = os.path.join(output_folder, "input_image.jpg")
             
-            # Check if input_image is a base64 string
+            import base64
+            import io
+            from PIL import Image
+            
+            if input_image is None:
+                raise ValueError("No input image provided. Please upload an image.")
+            
+            # Case 1: Base64 data URL (e.g., "data:image/jpeg;base64,/9j/4AAQ...")
             if isinstance(input_image, str) and input_image.startswith("data:image"):
-                # Convert base64 to PIL Image
-                import base64
-                import io
-                from PIL import Image
+                print("🔄 Processing base64 data URL...")
                 
                 # Extract base64 data from data URL
                 if input_image.startswith("data:image/jpeg;base64,"):
@@ -105,10 +109,46 @@ def create_gradio_interface(checkpoint_dir, output_dir):
                 image_data = base64.b64decode(base64_data)
                 pil_image = Image.open(io.BytesIO(image_data))
                 pil_image.save(input_image_path)
+                print("✅ Base64 data URL processed successfully")
+                
+            # Case 2: Raw base64 string (without data URL prefix)
+            elif isinstance(input_image, str) and len(input_image) > 100:  # Likely base64
+                print("🔄 Processing raw base64 string...")
+                try:
+                    # Try to decode as base64
+                    image_data = base64.b64decode(input_image)
+                    pil_image = Image.open(io.BytesIO(image_data))
+                    pil_image.save(input_image_path)
+                    print("✅ Raw base64 string processed successfully")
+                except Exception as e:
+                    print(f"⚠️ Failed to decode as base64: {e}")
+                    # Fall through to file path handling
+                    
+            # Case 3: File path (local file)
+            elif isinstance(input_image, str) and (input_image.endswith(('.jpg', '.jpeg', '.png', '.bmp', '.tiff')) or os.path.exists(input_image)):
+                print(f"🔄 Processing file path: {input_image}")
+                
+                # Check if file exists
+                if not os.path.exists(input_image):
+                    raise ValueError(f"Image file not found: {input_image}")
+                
+                # Copy the file to our output directory
+                import shutil
+                shutil.copy2(input_image, input_image_path)
+                print("✅ File path processed successfully")
+                
+            # Case 4: PIL Image object (from Gradio)
+            elif hasattr(input_image, 'save'):  # PIL Image object
+                print("🔄 Processing PIL Image object...")
+                input_image.save(input_image_path)
+                print("✅ PIL Image object processed successfully")
+                
+            # Case 5: None or empty
+            elif input_image is None or input_image == "":
+                raise ValueError("No input image provided. Please upload an image.")
                 
             else:
-                # It's a PIL Image object, save it
-                input_image.save(input_image_path)
+                raise ValueError(f"Unsupported image input type: {type(input_image)}. Expected PIL Image, base64 string, or file path.")
 
             # Determine checkpoint directory based on checkpoint parameter
             checkpoint_choice = input_json.get("checkpoint", "480p")

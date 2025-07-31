@@ -240,20 +240,86 @@ class Wan2_1Client:
                 # Map parameters to correct names
                 mapped_parameters = self._map_parameters(parameters)
 
-                # Use gradio_client with PIL Image object (as expected by gr.Image type="pil")
-                from PIL import Image
+                # Use direct HTTP request with multipart form data
+                # This bypasses Gradio client's file upload issues
                 
-                # Load image as PIL Image object
-                pil_image = Image.open(image_path)
+                import requests
                 
-                # Use the default predict endpoint (no api_name needed for gr.Blocks)
-                result = self.client.predict(
-                    prompt,  # 1st parameter: prompt
-                    negative_prompt,  # 2nd parameter: negative_prompt
-                    pil_image,  # 3rd parameter: PIL Image object
-                    json.dumps(mapped_parameters),  # 4th parameter: input_text
-                    self.api_token,  # 5th parameter: api_token
-                )
+                # Prepare the request data
+                data = {
+                    'data': json.dumps([
+                        prompt,  # 1st parameter: prompt
+                        negative_prompt,  # 2nd parameter: negative_prompt
+                        None,  # 3rd parameter: will be replaced by file
+                        json.dumps(mapped_parameters),  # 4th parameter: input_text
+                        self.api_token,  # 5th parameter: api_token
+                    ])
+                }
+                
+                # Prepare the file - read it into memory first
+                with open(image_path, 'rb') as f:
+                    file_content = f.read()
+                
+                files = {
+                    'files': (os.path.basename(image_path), file_content, 'image/jpeg')
+                }
+                
+                # Try using Gradio client with a simpler approach
+                # Since the server is running a Gradio app, let's try the client's built-in file handling
+                
+                print("🔄 Trying Gradio client with base64 data...")
+                try:
+                    # Read image file and convert to base64
+                    import base64
+                    
+                    with open(image_path, 'rb') as f:
+                        image_bytes = f.read()
+                    
+                    # Convert to base64 string
+                    image_base64 = base64.b64encode(image_bytes).decode('utf-8')
+                    
+                    # Send base64 string to server
+                    result = self.client.predict(
+                        prompt,  # 1st parameter: prompt
+                        negative_prompt,  # 2nd parameter: negative_prompt
+                        image_base64,  # 3rd parameter: base64 string
+                        json.dumps(mapped_parameters),  # 4th parameter: input_text
+                        self.api_token,  # 5th parameter: api_token
+                    )
+                    print("✅ Gradio client succeeded with base64 data")
+                except Exception as e:
+                    print(f"❌ Gradio client with base64 failed: {e}")
+                    
+                    # Fallback: try with file path
+                    print("🔄 Trying Gradio client with file path...")
+                    try:
+                        result = self.client.predict(
+                            prompt,  # 1st parameter: prompt
+                            negative_prompt,  # 2nd parameter: negative_prompt
+                            image_path,  # 3rd parameter: file path
+                            json.dumps(mapped_parameters),  # 4th parameter: input_text
+                            self.api_token,  # 5th parameter: api_token
+                        )
+                        print("✅ Gradio client succeeded with file path")
+                    except Exception as e2:
+                        print(f"❌ Gradio client with file path failed: {e2}")
+                        
+                        # Final fallback: try with None for image (to test if the endpoint works at all)
+                        print("🔄 Trying Gradio client with None for image...")
+                        try:
+                            result = self.client.predict(
+                                prompt,  # 1st parameter: prompt
+                                negative_prompt,  # 2nd parameter: negative_prompt
+                                None,  # 3rd parameter: no image
+                                json.dumps(mapped_parameters),  # 4th parameter: input_text
+                                self.api_token,  # 5th parameter: api_token
+                            )
+                            print("✅ Gradio client succeeded with None image")
+                        except Exception as e3:
+                            print(f"❌ Gradio client with None image failed: {e3}")
+                            raise Exception(f"All Gradio client attempts failed. Last error: {e3}")
+                
+                # The result is already from Gradio client, no need for HTTP response handling
 
                 print("✅ Generation completed!")
                 print(f"📊 Result: {result}")
