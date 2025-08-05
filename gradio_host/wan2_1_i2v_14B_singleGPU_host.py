@@ -329,7 +329,7 @@ def create_gradio_interface(checkpoint_dir, output_dir):
 if __name__ == "__main__":
     # Configuration
     checkpoint_dir = os.environ.get("CHECKPOINT_DIR", "./Wan2.1-I2V-14B")
-    output_dir = os.environ.get("OUTPUT_DIR", "./gradio_output")
+    output_dir = os.environ.get("OUTPUT_DIR", "/mnt/vfms/gradio_output")
     
     # Create output directory
     os.makedirs(output_dir, exist_ok=True)

@@ -280,7 +280,7 @@ if __name__ == "__main__":
     
     # Environment variables with fallbacks
     allowed_paths = os.environ.get("GRADIO_ALLOWED_PATHS", project_root).split(",")
-    save_dir = os.environ.get("GRADIO_SAVE_DIR", os.path.join(project_root, "gradio_output"))
+    save_dir = os.environ.get("GRADIO_SAVE_DIR", "/mnt/vfms/gradio_output")
 
     server_name = os.environ.get("GRADIO_SERVER_NAME", "0.0.0.0")
     server_port = int(os.environ.get("GRADIO_SERVER_PORT", 8080))
