@@ -343,7 +343,7 @@ if __name__ == "__main__":
     
     # Security settings
     allowed_paths = os.environ.get("GRADIO_ALLOWED_PATHS", os.getcwd()).split(",")
-    save_dir = os.environ.get("GRADIO_SAVE_DIR", os.path.join(os.getcwd(), "gradio_output"))
+    save_dir = os.environ.get("GRADIO_SAVE_DIR", "/mnt/vfms/gradio_output")
     
     print(f"🚀 Starting Wan2.1 i2v 14B server...")
     print(f"📁 Checkpoint directory: {checkpoint_dir}")

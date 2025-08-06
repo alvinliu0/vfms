@@ -210,6 +210,7 @@ def create_gradio_interface(checkpoint_dir, output_dir):
                 print(f"Output directory {output_folder} does not exist!")
 
             if os.path.exists(expected_video_path):
+                # Return the video path - Gradio will automatically serve it as a downloadable file
                 return expected_video_path, f"Video generated successfully!\nOutput saved to: {output_folder}\nPrompt: {prompt}"
             else:
                 # Check for other possible video files
