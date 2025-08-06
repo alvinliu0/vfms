@@ -342,8 +342,8 @@ if __name__ == "__main__":
     server_port = int(os.environ.get("GRADIO_SERVER_PORT", 8080))
     
     # Security settings
-    allowed_paths = os.environ.get("GRADIO_ALLOWED_PATHS", os.getcwd()).split(",")
     save_dir = os.environ.get("GRADIO_SAVE_DIR", "/mnt/vfms/gradio_output")
+    allowed_paths = os.environ.get("GRADIO_ALLOWED_PATHS", f"{os.getcwd()},{save_dir}").split(",")
     
     print(f"🚀 Starting Wan2.1 i2v 14B server...")
     print(f"📁 Checkpoint directory: {checkpoint_dir}")

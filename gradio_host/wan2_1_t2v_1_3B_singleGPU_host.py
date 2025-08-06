@@ -280,8 +280,8 @@ if __name__ == "__main__":
     checkpoint_dir = os.path.join(wan2_1_dir, "Wan2.1-T2V-1.3B")
     
     # Environment variables with fallbacks
-    allowed_paths = os.environ.get("GRADIO_ALLOWED_PATHS", project_root).split(",")
     save_dir = os.environ.get("GRADIO_SAVE_DIR", "/mnt/vfms/gradio_output")
+    allowed_paths = os.environ.get("GRADIO_ALLOWED_PATHS", f"{project_root},{save_dir}").split(",")
 
     server_name = os.environ.get("GRADIO_SERVER_NAME", "0.0.0.0")
     server_port = int(os.environ.get("GRADIO_SERVER_PORT", 8080))
