@@ -50,13 +50,13 @@ def sync_to_pbss(local_path: str, job_id: str, model_name: str):
         timestamp = datetime.datetime.now(zoneinfo.ZoneInfo("US/Pacific")).strftime("%Y-%m-%d")
         pbss_dest = f"s3://evaluation_videos/debug/lepton_api/{model_name}/{timestamp}_{job_id}/"
         
-        # Run s5cmd sync command with profile
-        cmd = ["s5cmd", "--profile", "team-cosmos-benchmark", "cp", local_path, pbss_dest]
+        # Run s5cmd sync command with profile and endpoint
+        cmd = ["s5cmd", "--profile", "team-cosmos-benchmark", "--endpoint-url", endpoint, "cp", local_path, pbss_dest]
         
         print(f"🔄 Syncing to PBSS: {' '.join(cmd)}")
         print(f"🌐 Using endpoint: {endpoint}")
         print(f"🌍 Using region: {region}")
-        print(f"👤 Using profile: team-cosmos-benchmark")
+        print("👤 Using profile: team-cosmos-benchmark")
         
         result = subprocess.run(cmd, capture_output=True, text=True, env=env)
         
@@ -184,15 +184,15 @@ def run_generation_async(generation_params: dict, output_folder: str, job_id: st
                 
                 # Write completion status
                 status_file = os.path.join(output_folder, "generation_status.json")
-                # Generate timestamp for PBSS path
-                timestamp = datetime.datetime.now(zoneinfo.ZoneInfo("US/Pacific")).strftime("%Y-%m-%d")
+                # Generate timestamp for PBSS path (just the date, not the full timestamp)
+                date_only = datetime.datetime.now(zoneinfo.ZoneInfo("US/Pacific")).strftime("%Y-%m-%d")
                 status_data = {
                     "job_id": job_id,
                     "status": "completed",
                     "completion_time": datetime.datetime.now(zoneinfo.ZoneInfo("US/Pacific")).isoformat(),
                     "video_path": expected_video_path,
                     "pbss_sync": sync_success,
-                    "pbss_path": f"s3://evaluation_videos/debug/lepton_api/{model_name}/{timestamp}_{job_id}/"
+                    "pbss_path": f"s3://evaluation_videos/debug/lepton_api/{model_name}/{date_only}_{job_id}/"
                 }
                 
                 with open(status_file, "w") as f:
@@ -353,7 +353,7 @@ def create_gradio_interface(checkpoint_dir, output_dir):
             status_message += f"⏰ Submission time: {timestamp}\n\n"
             status_message += "🔄 Generation is running in the background.\n"
             status_message += "📊 Check generation_status.json for progress updates.\n"
-            status_message += f"🌐 Results will be synced to PBSS at: s3://evaluation_videos/debug/lepton_api/{model_name}/{timestamp}_{job_id}/"
+            status_message += f"🌐 Results will be synced to PBSS at: s3://evaluation_videos/debug/lepton_api/{model_name}/{timestamp.split('_')[0]}_{job_id}/"
 
             return None, status_message
 
@@ -435,10 +435,10 @@ if __name__ == "__main__":
         print("Please ensure the Wan2.1 repository is available in the project directory.")
         print("Expected structure:")
         print(f"  {project_root}/")
-        print(f"  ├── Wan2.1/")
-        print(f"  │   ├── generate.py")
-        print(f"  │   └── Wan2.1-T2V-1.3B/")
-        print(f"  └── gradio_host/")
+        print("  ├── Wan2.1/")
+        print("  │   ├── generate.py")
+        print("  │   └── Wan2.1-T2V-1.3B/")
+        print("  └── gradio_host/")
         sys.exit(1)
 
     # Check if generate.py exists
