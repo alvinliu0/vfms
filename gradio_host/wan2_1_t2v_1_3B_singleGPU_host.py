@@ -48,7 +48,7 @@ def sync_to_pbss(local_path: str, job_id: str, model_name: str):
         
         # Construct PBSS destination path
         timestamp = datetime.datetime.now(zoneinfo.ZoneInfo("US/Pacific")).strftime("%Y-%m-%d")
-        pbss_dest = f"s3://evaluation_videos/debug/lepton_api/{model_name}/{timestamp}_{job_id}/"
+        pbss_dest = f"s3://evaluation_videos/lepton_api/{model_name}/{timestamp}_{job_id}/"
         
         # Run s5cmd sync command with profile and endpoint
         cmd = ["s5cmd", "--profile", "team-cosmos-benchmark", "--endpoint-url", endpoint, "cp", local_path, pbss_dest]
@@ -192,7 +192,7 @@ def run_generation_async(generation_params: dict, output_folder: str, job_id: st
                     "completion_time": datetime.datetime.now(zoneinfo.ZoneInfo("US/Pacific")).isoformat(),
                     "video_path": expected_video_path,
                     "pbss_sync": sync_success,
-                    "pbss_path": f"s3://evaluation_videos/debug/lepton_api/{model_name}/{date_only}_{job_id}/"
+                    "pbss_path": f"s3://evaluation_videos/lepton_api/{model_name}/{date_only}_{job_id}/"
                 }
                 
                 with open(status_file, "w") as f:
@@ -353,7 +353,7 @@ def create_gradio_interface(checkpoint_dir, output_dir):
             status_message += f"⏰ Submission time: {timestamp}\n\n"
             status_message += "🔄 Generation is running in the background.\n"
             status_message += "📊 Check generation_status.json for progress updates.\n"
-            status_message += f"🌐 Results will be synced to PBSS at: s3://evaluation_videos/debug/lepton_api/{model_name}/{timestamp.split('_')[0]}_{job_id}/"
+            status_message += f"🌐 Results will be synced to PBSS at: s3://evaluation_videos/lepton_api/{model_name}/{timestamp.split('_')[0]}_{job_id}/"
 
             return None, status_message
 
