@@ -42,42 +42,9 @@ def sync_to_pbss(local_path: str, job_id: str, model_name: str):
             print(f"⚠️ Missing PBSS configuration. Endpoint: {endpoint}, Region: {region}, Secret: {'*' * 10 if secret_key else 'None'}")
             return False
         
-        # Create AWS credentials file (required by s5cmd) - matching your exact format
-        aws_credentials = f"""[team-cosmos-benchmark]
-region={region}
-aws_access_key_id=team-cosmos-benchmark
-aws_secret_access_key={secret_key}
-s3=
-    endpoint_url={endpoint}
-s3api=
-    endpoint_url={endpoint}
-    payload_signing_enabled=true
-"""
-        
-        # Create AWS config file - matching your exact format
-        aws_config = f"""[profile team-cosmos-benchmark]
-aws_access_key_id = team-cosmos-benchmark
-aws_secret_access_key = {secret_key}
-region = {region}
-"""
-        
-        # Write credentials file to the location s5cmd expects
-        aws_dir = "/root/.aws"
-        os.makedirs(aws_dir, exist_ok=True)
-        
-        credentials_path = os.path.join(aws_dir, "credentials")
-        with open(credentials_path, "w") as f:
-            f.write(aws_credentials)
-        
-        # Write config file to the location s5cmd expects
-        config_path = os.path.join(aws_dir, "config")
-        with open(config_path, "w") as f:
-            f.write(aws_config)
-        
-        # Set environment variables for s5cmd (these should override the default paths)
+        # Credentials should be set up beforehand using setup_pbss_credentials.py
+        # Just use the existing credentials in /root/.aws/
         env = os.environ.copy()
-        env["AWS_SHARED_CREDENTIALS_FILE"] = credentials_path
-        env["AWS_CONFIG_FILE"] = config_path
         
         # Construct PBSS destination path
         timestamp = datetime.datetime.now(zoneinfo.ZoneInfo("US/Pacific")).strftime("%Y-%m-%d")
@@ -95,24 +62,10 @@ region = {region}
         
         if result.returncode == 0:
             print(f"✅ Successfully synced to PBSS: {pbss_dest}")
-            # Clean up temporary AWS files
-            try:
-                os.remove(credentials_path)
-                os.remove(config_path)
-                os.rmdir(aws_dir)
-            except OSError:
-                pass  # Ignore cleanup errors
             return True
         else:
             print(f"❌ Failed to sync to PBSS: {result.stderr}")
             print(f"stdout: {result.stdout}")
-            # Clean up temporary AWS files even on failure
-            try:
-                os.remove(credentials_path)
-                os.remove(config_path)
-                os.rmdir(aws_dir)
-            except OSError:
-                pass  # Ignore cleanup errors
             return False
             
     except Exception as e:
