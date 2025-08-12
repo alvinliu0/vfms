@@ -231,6 +231,8 @@ def run_generation_async(generation_params: dict, output_folder: str, job_id: st
                 
                 # Write completion status
                 status_file = os.path.join(output_folder, "generation_status.json")
+                # Generate timestamp for PBSS path
+                timestamp = datetime.datetime.now(zoneinfo.ZoneInfo("US/Pacific")).strftime("%Y-%m-%d")
                 status_data = {
                     "job_id": job_id,
                     "status": "completed",
