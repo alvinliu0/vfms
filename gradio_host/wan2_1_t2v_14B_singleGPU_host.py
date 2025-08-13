@@ -18,82 +18,90 @@ import sys
 import traceback
 import zoneinfo
 import threading
-import time
 from typing import Optional
 
 import gradio as gr
 
 
-# PBSS Configuration
-def get_pbss_config():
-    """Get PBSS configuration from environment variables."""
-    endpoint = os.environ.get("TEAM_COSMOS_BENCHMARK_ENDPOINT")
-    region = os.environ.get("TEAM_COSMOS_BENCHMARK_REGION")
-    secret_key = os.environ.get("XIANL_TEAM_COSMOS_BENCHMARK")
+def sync_to_pbss(local_path: str, job_id: str, model_name: str):
+    """
+    Synchronize generated results to PBSS using s5cmd.
     
-    if not all([endpoint, region, secret_key]):
-        print(f"⚠️ Missing PBSS configuration. Endpoint: {endpoint}, Region: {region}, Secret: {'*' * 10 if secret_key else 'None'}")
-        return None, None, None
-    
-    # Credentials should be set up beforehand using setup_pbss_credentials.py
-    # Just use the existing credentials in /root/.aws/
-    return endpoint, region, secret_key
-
-
-def run_generation_async(prompt, negative_prompt, input_text, api_token, checkpoint_dir, output_dir, model_name):
-    """Run generation asynchronously in a background thread."""
+    Args:
+        local_path: Local path to the generated video
+        job_id: Unique job identifier
+        model_name: Name of the model used for generation
+    """
     try:
-        # Parse input text as JSON
-        input_json = json.loads(input_text)
+        # Get PBSS configuration from environment variables
+        endpoint = os.environ.get("TEAM_COSMOS_BENCHMARK_ENDPOINT")
+        region = os.environ.get("TEAM_COSMOS_BENCHMARK_REGION")
+        secret_key = os.environ.get("XIANL_TEAM_COSMOS_BENCHMARK")
         
-        # Create unique output folder with model name
-        timestamp = datetime.datetime.now(zoneinfo.ZoneInfo("US/Pacific")).strftime("%Y-%m-%d_%H-%M-%S")
-        random_generation_id = "".join(random.choices(string.ascii_lowercase, k=4))
-        job_id = f"{timestamp}_{random_generation_id}"
+        if not all([endpoint, region, secret_key]):
+            print(f"⚠️ Missing PBSS configuration. Endpoint: {endpoint}, Region: {region}, Secret: {'*' * 10 if secret_key else 'None'}")
+            return False
         
-        # Create model-specific output directory
-        model_output_dir = os.path.join(output_dir, model_name)
-        output_folder = os.path.join(model_output_dir, f"generation_{timestamp}_{random_generation_id}")
-        os.makedirs(output_folder, exist_ok=True)
+        # Credentials should be set up beforehand using setup_pbss_credentials.py
+        # Just use the existing credentials in /root/.aws/
+        env = os.environ.copy()
         
-        # Set generation parameters
-        generation_params = {
-            "prompt": prompt,
-            "negative_prompt": negative_prompt,
-            "checkpoint_dir": checkpoint_dir,
-            "output_folder": output_folder,
-            "video_save_name": "output",
-            "model_name": model_name,
-            **input_json,  # Merge additional parameters from JSON
-        }
+        # Construct PBSS destination path
+        timestamp = datetime.datetime.now(zoneinfo.ZoneInfo("US/Pacific")).strftime("%Y-%m-%d")
+        pbss_dest = f"s3://evaluation_videos/lepton_api/{model_name}/{timestamp}_{job_id}/"
         
-        # Write generation params to file for reference
-        params_path = os.path.join(output_folder, "generation_params.json")
-        with open(params_path, "w") as f:
-            json.dump(generation_params, f, indent=2)
+        # Run s5cmd sync command with profile and endpoint
+        cmd = ["s5cmd", "--profile", "team-cosmos-benchmark", "--endpoint-url", endpoint, "cp", local_path, pbss_dest]
         
-        # Write prompt and negative prompt to files
-        with open(os.path.join(output_folder, "prompt.txt"), "w") as f:
-            f.write(prompt)
+        print(f"🔄 Syncing to PBSS: {' '.join(cmd)}")
+        print(f"🌐 Using endpoint: {endpoint}")
+        print(f"🌍 Using region: {region}")
+        print("👤 Using profile: team-cosmos-benchmark")
         
-        with open(os.path.join(output_folder, "negative_prompt.txt"), "w") as f:
-            f.write(negative_prompt)
+        result = subprocess.run(cmd, capture_output=True, text=True, env=env)
         
-        # Build command line arguments for generate.py
+        if result.returncode == 0:
+            print(f"✅ Successfully synced to PBSS: {pbss_dest}")
+            return True
+        else:
+            print(f"❌ Failed to sync to PBSS: {result.stderr}")
+            print(f"stdout: {result.stdout}")
+            return False
+            
+    except Exception as e:
+        print(f"❌ Error during PBSS sync: {e}")
+        return False
+
+
+def run_generation_async(generation_params: dict, output_folder: str, job_id: str, model_name: str):
+    """
+    Run generation in a background thread and sync results to PBSS.
+    
+    Args:
+        generation_params: Generation parameters
+        output_folder: Output folder path
+        job_id: Unique job identifier
+        model_name: Name of the model
+    """
+    try:
+        print(f"🔄 Starting async generation for job {job_id}...")
+        
+        # Get the Wan2.1 directory path
         current_dir = os.path.dirname(os.path.abspath(__file__))
         project_root = os.path.dirname(current_dir)
         wan2_1_dir = os.path.join(project_root, "Wan2.1")
         generate_py_path = os.path.join(wan2_1_dir, "generate.py")
         
+        # Build command line arguments for generate.py
         cmd_args = [
             "python",
             generate_py_path,
             "--task",
             "t2v-14B",  # Updated for 14B model
             "--prompt",
-            prompt,
+            generation_params["prompt"],
             "--ckpt_dir",
-            checkpoint_dir,
+            os.path.join(wan2_1_dir, "Wan2.1-T2V-14B"),  # Updated for 14B model
             "--save_file",
             os.path.join(output_folder, "output.mp4"),
             "--offload_model",
@@ -104,36 +112,36 @@ def run_generation_async(prompt, negative_prompt, input_text, api_token, checkpo
             "unipc",
         ]
         
-        # Add additional parameters from JSON
-        if "frame_num" in input_json:
-            cmd_args.extend(["--frame_num", str(input_json["frame_num"])])
-        elif "num_frames" in input_json:
-            cmd_args.extend(["--frame_num", str(input_json["num_frames"])])
+        # Add additional parameters from generation_params
+        if "frame_num" in generation_params:
+            cmd_args.extend(["--frame_num", str(generation_params["frame_num"])])
+        elif "num_frames" in generation_params:
+            cmd_args.extend(["--frame_num", str(generation_params["num_frames"])])
         
-        if "sample_steps" in input_json:
-            cmd_args.extend(["--sample_steps", str(input_json["sample_steps"])])
-        elif "num_inference_steps" in input_json:
-            cmd_args.extend(["--sample_steps", str(input_json["num_inference_steps"])])
+        if "sample_steps" in generation_params:
+            cmd_args.extend(["--sample_steps", str(generation_params["sample_steps"])])
+        elif "num_inference_steps" in generation_params:
+            cmd_args.extend(["--sample_steps", str(generation_params["num_inference_steps"])])
         
-        if "sample_guide_scale" in input_json:
-            cmd_args.extend(["--sample_guide_scale", str(input_json["sample_guide_scale"])])
-        elif "guidance_scale" in input_json:
-            cmd_args.extend(["--sample_guide_scale", str(input_json["guidance_scale"])])
+        if "sample_guide_scale" in generation_params:
+            cmd_args.extend(["--sample_guide_scale", str(generation_params["sample_guide_scale"])])
+        elif "guidance_scale" in generation_params:
+            cmd_args.extend(["--sample_guide_scale", str(generation_params["guidance_scale"])])
         
-        if "base_seed" in input_json:
-            cmd_args.extend(["--base_seed", str(input_json["base_seed"])])
-        elif "seed" in input_json:
-            cmd_args.extend(["--base_seed", str(input_json["seed"])])
+        if "base_seed" in generation_params:
+            cmd_args.extend(["--base_seed", str(generation_params["base_seed"])])
+        elif "seed" in generation_params:
+            cmd_args.extend(["--base_seed", str(generation_params["seed"])])
         
-        if "width" in input_json:
-            cmd_args.extend(["--width", str(input_json["width"])])
+        if "width" in generation_params:
+            cmd_args.extend(["--width", str(generation_params["width"])])
         
-        if "height" in input_json:
-            cmd_args.extend(["--height", str(input_json["height"])])
+        if "height" in generation_params:
+            cmd_args.extend(["--height", str(generation_params["height"])])
         
         # Run generation
         print(f"🚀 Starting generation for job {job_id}...")
-        print(f"📝 Prompt: {prompt}")
+        print(f"📝 Prompt: {generation_params['prompt']}")
         print(f"⚙️ Parameters: {generation_params}")
         
         result = subprocess.run(cmd_args, capture_output=True, text=True, timeout=3600)  # 1 hour timeout
@@ -155,30 +163,12 @@ def run_generation_async(prompt, negative_prompt, input_text, api_token, checkpo
                 }
                 
                 # Try to sync to PBSS
-                endpoint, region, secret_key = get_pbss_config()
-                if endpoint and region and secret_key:
-                    try:
-                        # Construct PBSS destination path
-                        date_only = timestamp.split('_')[0]
-                        pbss_dest = f"s3://evaluation_videos/lepton_api/{model_name}/{timestamp}_{job_id}/"
-                        
-                        # Use s5cmd to sync to PBSS
-                        cmd = ["s5cmd", "--profile", "team-cosmos-benchmark", "--endpoint-url", endpoint, "cp", video_path, pbss_dest]
-                        
-                        print(f"🌐 Syncing to PBSS: {pbss_dest}")
-                        print(f"👤 Using profile: team-cosmos-benchmark")
-                        
-                        sync_result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)  # 5 min timeout
-                        
-                        if sync_result.returncode == 0:
-                            status_data["pbss_sync"] = True
-                            status_data["pbss_path"] = f"s3://evaluation_videos/lepton_api/{model_name}/{date_only}_{job_id}/"
-                            print(f"✅ Successfully synced to PBSS: {status_data['pbss_path']}")
-                        else:
-                            print(f"❌ PBSS sync failed: {sync_result.stderr}")
-                            
-                    except Exception as e:
-                        print(f"❌ Error during PBSS sync: {e}")
+                sync_success = sync_to_pbss(video_path, job_id, model_name)
+                if sync_success:
+                    status_data["pbss_sync"] = True
+                    # Generate timestamp for PBSS path (just the date, not the full timestamp)
+                    date_only = datetime.datetime.now(zoneinfo.ZoneInfo("US/Pacific")).strftime("%Y-%m-%d")
+                    status_data["pbss_path"] = f"s3://evaluation_videos/lepton_api/{model_name}/{date_only}_{job_id}/"
                 
                 # Save final status
                 status_file = os.path.join(output_folder, "generation_status.json")
@@ -260,6 +250,41 @@ def create_gradio_interface(checkpoint_dir, output_dir):
             if not input_text:
                 raise ValueError("No configuration provided. Please provide a valid JSON string.")
 
+            # Parse input text as JSON
+            try:
+                input_json = json.loads(input_text)
+            except json.JSONDecodeError as e:
+                raise ValueError(f"Invalid JSON in input_text: {e}")
+
+            # Create unique output folder with model name
+            timestamp = datetime.datetime.now(zoneinfo.ZoneInfo("US/Pacific")).strftime("%Y-%m-%d_%H-%M-%S")
+            random_generation_id = "".join(random.choices(string.ascii_lowercase, k=4))
+            job_id = f"{timestamp}_{random_generation_id}"
+            
+            # Create model-specific output directory
+            model_output_dir = os.path.join(output_dir, model_name)
+            output_folder = os.path.join(model_output_dir, f"generation_{timestamp}_{random_generation_id}")
+            os.makedirs(output_folder, exist_ok=True)
+
+            # Set generation parameters
+            generation_params = {
+                "prompt": prompt,
+                "negative_prompt": negative_prompt,
+                **input_json,  # Merge additional parameters from JSON
+            }
+
+            # Write generation params to file for reference
+            params_path = os.path.join(output_folder, "generation_params.json")
+            with open(params_path, "w") as f:
+                json.dump(generation_params, f, indent=2)
+            
+            # Write prompt and negative prompt to files
+            with open(os.path.join(output_folder, "prompt.txt"), "w") as f:
+                f.write(prompt)
+            
+            with open(os.path.join(output_folder, "negative_prompt.txt"), "w") as f:
+                f.write(negative_prompt)
+
             # Start generation asynchronously
             print(f"🚀 Starting asynchronous generation...")
             print(f"📝 Prompt: {prompt}")
@@ -267,7 +292,7 @@ def create_gradio_interface(checkpoint_dir, output_dir):
             # Create a thread for generation
             generation_thread = threading.Thread(
                 target=run_generation_async,
-                args=(prompt, negative_prompt, input_text, api_token, checkpoint_dir, output_dir, model_name)
+                args=(generation_params, output_folder, job_id, model_name)
             )
             generation_thread.daemon = True
             generation_thread.start()
@@ -280,10 +305,10 @@ def create_gradio_interface(checkpoint_dir, output_dir):
             status_message += f"📁 Results will be saved locally and synced to PBSS automatically\n"
             
             # Get PBSS config for status message
-            endpoint, region, secret_key = get_pbss_config()
-            if endpoint and region and secret_key:
-                timestamp = datetime.datetime.now(zoneinfo.ZoneInfo("US/Pacific")).strftime("%Y-%m-%d_%H-%M-%S")
-                status_message += f"🌐 Results will be synced to PBSS at: s3://evaluation_videos/lepton_api/{model_name}/{timestamp.split('_')[0]}_<job_id>/"
+            endpoint = os.environ.get("TEAM_COSMOS_BENCHMARK_ENDPOINT")
+            if endpoint:
+                date_only = datetime.datetime.now(zoneinfo.ZoneInfo("US/Pacific")).strftime("%Y-%m-%d")
+                status_message += f"🌐 Results will be synced to PBSS at: s3://evaluation_videos/lepton_api/{model_name}/{date_only}_<job_id>/"
             
             return None, status_message
 
@@ -331,7 +356,7 @@ def create_gradio_interface(checkpoint_dir, output_dir):
     except ValueError:
         status_update_rate = "auto"
 
-    print(f"Configuring queue with {concurrency_limit=} {max_queue_size=} {status_update_rate=}")
+    print(f"Configuring queue with concurrency_limit={concurrency_limit} max_queue_size={max_queue_size} status_update_rate={status_update_rate}")
 
     return interface.queue(
         max_size=max_queue_size,
@@ -355,7 +380,7 @@ if __name__ == "__main__":
     server_name = os.environ.get("GRADIO_SERVER_NAME", "0.0.0.0")
     server_port = int(os.environ.get("GRADIO_SERVER_PORT", 8080))
 
-    print(f"Starting Gradio Wan2.1 14B App - {server_name=} {server_port=}")
+    print(f"Starting Gradio Wan2.1 14B App - server_name={server_name} server_port={server_port}")
     print(f"Project root: {project_root}")
     print(f"Wan2.1 directory: {wan2_1_dir}")
     print(f"Generate.py path: {generate_py_path}")
