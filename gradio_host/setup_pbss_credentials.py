@@ -122,7 +122,7 @@ def test_credentials():
         print("🔄 Testing s5cmd ls command...")
         
         # Test listing the bucket
-        cmd = ["s5cmd", "--profile", "team-cosmos-benchmark", "ls", "s3://evaluation_videos/"]
+        cmd = ["s5cmd", "--profile", "team-cosmos-benchmark", "--endpoint-url", "https://pdx.s8k.io", "ls", "s3://evaluation_videos/"]
         print(f"📋 Running: {' '.join(cmd)}")
         
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)

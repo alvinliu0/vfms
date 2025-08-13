@@ -285,6 +285,20 @@ def create_gradio_interface(checkpoint_dir, output_dir):
             with open(os.path.join(output_folder, "negative_prompt.txt"), "w") as f:
                 f.write(negative_prompt)
 
+            # Write initial job status
+            status_file = os.path.join(output_folder, "generation_status.json")
+            initial_status = {
+                "job_id": job_id,
+                "status": "submitted",
+                "submission_time": datetime.datetime.now(zoneinfo.ZoneInfo("US/Pacific")).isoformat(),
+                "prompt": prompt,
+                "negative_prompt": negative_prompt,
+                "parameters": input_json
+            }
+            
+            with open(status_file, "w") as f:
+                json.dump(initial_status, f, indent=2)
+
             # Start generation asynchronously
             print(f"🚀 Starting asynchronous generation...")
             print(f"📝 Prompt: {prompt}")
@@ -296,19 +310,21 @@ def create_gradio_interface(checkpoint_dir, output_dir):
             )
             generation_thread.daemon = True
             generation_thread.start()
-            
-            # Return immediately with status message
-            status_message = f"🚀 Generation started asynchronously!\n"
+
+            # Return immediate response with job ID and PBSS location
+            status_message = "✅ Generation job submitted successfully!\n\n"
+            status_message += f"🆔 Job ID: {job_id}\n"
+            status_message += f"📁 Output folder: {output_folder}\n"
             status_message += f"📝 Prompt: {prompt}\n"
-            status_message += f"⏰ Started at: {datetime.datetime.now(zoneinfo.ZoneInfo('US/Pacific')).strftime('%Y-%m-%d %H:%M:%S')}\n"
-            status_message += f"🔄 Generation is running in the background...\n"
-            status_message += f"📁 Results will be saved locally and synced to PBSS automatically\n"
+            status_message += f"⏰ Submission time: {timestamp}\n\n"
+            status_message += "🔄 Generation is running in the background.\n"
+            status_message += "📊 Check generation_status.json for progress updates.\n"
             
             # Get PBSS config for status message
             endpoint = os.environ.get("TEAM_COSMOS_BENCHMARK_ENDPOINT")
             if endpoint:
                 date_only = datetime.datetime.now(zoneinfo.ZoneInfo("US/Pacific")).strftime("%Y-%m-%d")
-                status_message += f"🌐 Results will be synced to PBSS at: s3://evaluation_videos/lepton_api/{model_name}/{date_only}_<job_id>/"
+                status_message += f"🌐 Results will be synced to PBSS at: s3://evaluation_videos/lepton_api/{model_name}/{date_only}_{job_id}/"
             
             return None, status_message
 
@@ -419,4 +435,4 @@ if __name__ == "__main__":
         server_port=server_port,
         share=False,
         allowed_paths=allowed_paths,
-    ) 
+    )
