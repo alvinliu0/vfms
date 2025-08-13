@@ -276,7 +276,7 @@ def create_gradio_interface(checkpoint_dir, output_dir):
             
             # Create model-specific output directory
             model_output_dir = os.path.join(output_dir, model_name)
-            output_folder = os.path.join(model_output_dir, f"generation_{timestamp}_{random_generation_id}")
+            output_folder = os.path.join(model_output_dir, f"generation_{job_id}")
             os.makedirs(output_folder, exist_ok=True)
 
             # Set generation parameters
