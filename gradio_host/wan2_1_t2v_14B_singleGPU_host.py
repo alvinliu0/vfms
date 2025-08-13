@@ -219,6 +219,9 @@ def create_gradio_interface(checkpoint_dir, output_dir):
     
     # Define model name for output organization
     model_name = "wan2.1_t2v_14B_singleGPU"
+    
+    # Capture checkpoint_dir in closure for _infer function to access
+    checkpoint_dir_closure = checkpoint_dir
 
     def _infer(prompt, negative_prompt, input_text: str, api_token: str = "") -> tuple[Optional[str], Optional[str]]:
         """
@@ -238,6 +241,11 @@ def create_gradio_interface(checkpoint_dir, output_dir):
             Tuple containing None (no immediate result) and status message.
         """
         try:
+            print(f"🔍 DEBUG: _infer function called with prompt: {prompt[:50]}...")
+            print(f"🔍 DEBUG: _infer function called with negative_prompt: {negative_prompt[:50]}...")
+            print(f"🔍 DEBUG: _infer function called with input_text: {input_text[:100]}...")
+            print(f"🔍 DEBUG: _infer function called with api_token: {api_token[:10] if api_token else 'None'}...")
+            
             # Validate API token if provided
             if api_token:
                 # You can add token validation logic here
@@ -270,6 +278,10 @@ def create_gradio_interface(checkpoint_dir, output_dir):
             generation_params = {
                 "prompt": prompt,
                 "negative_prompt": negative_prompt,
+                "checkpoint_dir": checkpoint_dir_closure,
+                "output_folder": output_folder,
+                "video_save_name": "output",
+                "model_name": model_name,
                 **input_json,  # Merge additional parameters from JSON
             }
 
@@ -435,4 +447,4 @@ if __name__ == "__main__":
         server_port=server_port,
         share=False,
         allowed_paths=allowed_paths,
-    )
+    ) 
