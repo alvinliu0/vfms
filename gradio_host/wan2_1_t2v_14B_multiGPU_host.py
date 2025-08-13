@@ -93,8 +93,10 @@ def run_generation_async(generation_params: dict, output_folder: str, job_id: st
         generate_py_path = os.path.join(wan2_1_dir, "generate.py")
         
         # Build command line arguments for generate.py
+        # Use torchrun for multi-GPU inference
         cmd_args = [
-            "python",
+            "torchrun",
+            "--nproc_per_node=8",  # Use 8 GPUs
             generate_py_path,
             "--task",
             "t2v-14B",  # Updated for 14B model
@@ -104,9 +106,9 @@ def run_generation_async(generation_params: dict, output_folder: str, job_id: st
             os.path.join(wan2_1_dir, "Wan2.1-T2V-14B"),  # Updated for 14B model
             "--save_file",
             os.path.join(output_folder, "output.mp4"),
-            "--offload_model",
-            "False",
-            "--t5_cpu",  # Move T5 text encoder to CPU to reduce GPU memory usage
+            "--dit_fsdp",  # Enable FSDP for DIT model
+            "--t5_fsdp",   # Enable FSDP for T5 text encoder
+            "--ulysses_size", "8",  # Ulysses communication group size
             "--sample_shift",
             "5.0",
             "--sample_solver",
@@ -210,7 +212,7 @@ def run_generation_async(generation_params: dict, output_folder: str, job_id: st
 
 def create_gradio_interface(checkpoint_dir, output_dir):
     """
-    Create Gradio interface for Wan2.1 text-to-video generation.
+    Create Gradio interface for Wan2.1 text-to-video generation with multi-GPU support.
 
     Args:
         checkpoint_dir: Path to model checkpoints
@@ -221,7 +223,7 @@ def create_gradio_interface(checkpoint_dir, output_dir):
     """
     
     # Define model name for output organization
-    model_name = "wan2.1_t2v_14B_singleGPU"
+    model_name = "wan2.1_t2v_14B_multiGPU"
     
     # Capture checkpoint_dir in closure for _infer function to access
     checkpoint_dir_closure = checkpoint_dir
@@ -374,8 +376,8 @@ def create_gradio_interface(checkpoint_dir, output_dir):
             gr.Textbox(label="API Token (Optional)", type="password", placeholder="Enter your API token here..."),
         ],
         outputs=[gr.Video(label="Generated Video", height=500), gr.Textbox(label="Output", lines=10)],
-        title="Wan2.1: Text-to-Video Generation (14B Model)",
-        description="Generate videos from text prompts using the Wan2.1 14B model. GPU: H100 (80GB) - Optimized for fast generation",
+        title="Wan2.1: Text-to-Video Generation (14B Model - Multi-GPU)",
+        description="Generate videos from text prompts using the Wan2.1 14B model with 8-GPU FSDP acceleration. Optimized for ultra-fast generation",
         theme=gr.themes.Soft(),
     )
 
@@ -411,12 +413,13 @@ if __name__ == "__main__":
     server_name = os.environ.get("GRADIO_SERVER_NAME", "0.0.0.0")
     server_port = int(os.environ.get("GRADIO_SERVER_PORT", 8080))
 
-    print(f"Starting Gradio Wan2.1 14B App - server_name={server_name} server_port={server_port}")
+    print(f"Starting Gradio Wan2.1 14B Multi-GPU App - server_name={server_name} server_port={server_port}")
     print(f"Project root: {project_root}")
     print(f"Wan2.1 directory: {wan2_1_dir}")
     print(f"Generate.py path: {generate_py_path}")
     print(f"Checkpoint directory: {checkpoint_dir}")
     print(f"Save directory: {save_dir}")
+    print(f"Multi-GPU configuration: 8 GPUs with FSDP (DIT + T5)")
 
     # Check if Wan2.1 code exists
     if not os.path.exists(wan2_1_dir):
@@ -444,7 +447,8 @@ if __name__ == "__main__":
     interface = create_gradio_interface(checkpoint_dir, save_dir)
 
     # Launch the app
-    print(f"🚀 Launching Wan2.1 14B Gradio app on {server_name}:{server_port}")
+    print(f"🚀 Launching Wan2.1 14B Multi-GPU Gradio app on {server_name}:{server_port}")
+    print(f"⚡ Multi-GPU acceleration: 8 GPUs with FSDP for ultra-fast generation")
     interface.launch(
         server_name=server_name,
         server_port=server_port,
