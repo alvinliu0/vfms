@@ -1,9 +1,9 @@
+#!/usr/bin/env python3
 """
 Gradio app for Wan2.1 text-to-video generation with 14B model on single GPU.
 
-This app provides a clean interface for text-to-video generation using the Wan2.1 model.
-It follows the same patterns as the cosmos_transfer1_3.50.2.py app but adapted for
-text-to-video generation using the actual Wan2.1 codebase.
+This app provides asynchronous text-to-video generation with automatic PBSS sync.
+It follows the same patterns as the working T2V 1.3B model.
 
 Tested with gradio==5.38.2
 """
@@ -17,9 +17,202 @@ import subprocess
 import sys
 import traceback
 import zoneinfo
+import threading
+import time
 from typing import Optional
 
 import gradio as gr
+
+
+# PBSS Configuration
+def get_pbss_config():
+    """Get PBSS configuration from environment variables."""
+    endpoint = os.environ.get("TEAM_COSMOS_BENCHMARK_ENDPOINT")
+    region = os.environ.get("TEAM_COSMOS_BENCHMARK_REGION")
+    secret_key = os.environ.get("XIANL_TEAM_COSMOS_BENCHMARK")
+    
+    if not all([endpoint, region, secret_key]):
+        print(f"⚠️ Missing PBSS configuration. Endpoint: {endpoint}, Region: {region}, Secret: {'*' * 10 if secret_key else 'None'}")
+        return None, None, None
+    
+    # Credentials should be set up beforehand using setup_pbss_credentials.py
+    # Just use the existing credentials in /root/.aws/
+    return endpoint, region, secret_key
+
+
+def run_generation_async(prompt, negative_prompt, input_text, api_token, checkpoint_dir, output_dir, model_name):
+    """Run generation asynchronously in a background thread."""
+    try:
+        # Parse input text as JSON
+        input_json = json.loads(input_text)
+        
+        # Create unique output folder with model name
+        timestamp = datetime.datetime.now(zoneinfo.ZoneInfo("US/Pacific")).strftime("%Y-%m-%d_%H-%M-%S")
+        random_generation_id = "".join(random.choices(string.ascii_lowercase, k=4))
+        job_id = f"{timestamp}_{random_generation_id}"
+        
+        # Create model-specific output directory
+        model_output_dir = os.path.join(output_dir, model_name)
+        output_folder = os.path.join(model_output_dir, f"generation_{timestamp}_{random_generation_id}")
+        os.makedirs(output_folder, exist_ok=True)
+        
+        # Set generation parameters
+        generation_params = {
+            "prompt": prompt,
+            "negative_prompt": negative_prompt,
+            "checkpoint_dir": checkpoint_dir,
+            "output_folder": output_folder,
+            "video_save_name": "output",
+            "model_name": model_name,
+            **input_json,  # Merge additional parameters from JSON
+        }
+        
+        # Write generation params to file for reference
+        params_path = os.path.join(output_folder, "generation_params.json")
+        with open(params_path, "w") as f:
+            json.dump(generation_params, f, indent=2)
+        
+        # Write prompt and negative prompt to files
+        with open(os.path.join(output_folder, "prompt.txt"), "w") as f:
+            f.write(prompt)
+        
+        with open(os.path.join(output_folder, "negative_prompt.txt"), "w") as f:
+            f.write(negative_prompt)
+        
+        # Build command line arguments for generate.py
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        project_root = os.path.dirname(current_dir)
+        wan2_1_dir = os.path.join(project_root, "Wan2.1")
+        generate_py_path = os.path.join(wan2_1_dir, "generate.py")
+        
+        cmd_args = [
+            "python",
+            generate_py_path,
+            "--task",
+            "t2v-14B",  # Updated for 14B model
+            "--prompt",
+            prompt,
+            "--ckpt_dir",
+            checkpoint_dir,
+            "--save_file",
+            os.path.join(output_folder, "output.mp4"),
+            "--offload_model",
+            "False",
+            "--sample_shift",
+            "5.0",
+            "--sample_solver",
+            "unipc",
+        ]
+        
+        # Add additional parameters from JSON
+        if "frame_num" in input_json:
+            cmd_args.extend(["--frame_num", str(input_json["frame_num"])])
+        elif "num_frames" in input_json:
+            cmd_args.extend(["--frame_num", str(input_json["num_frames"])])
+        
+        if "sample_steps" in input_json:
+            cmd_args.extend(["--sample_steps", str(input_json["sample_steps"])])
+        elif "num_inference_steps" in input_json:
+            cmd_args.extend(["--sample_steps", str(input_json["num_inference_steps"])])
+        
+        if "sample_guide_scale" in input_json:
+            cmd_args.extend(["--sample_guide_scale", str(input_json["sample_guide_scale"])])
+        elif "guidance_scale" in input_json:
+            cmd_args.extend(["--sample_guide_scale", str(input_json["guidance_scale"])])
+        
+        if "base_seed" in input_json:
+            cmd_args.extend(["--base_seed", str(input_json["base_seed"])])
+        elif "seed" in input_json:
+            cmd_args.extend(["--base_seed", str(input_json["seed"])])
+        
+        if "width" in input_json:
+            cmd_args.extend(["--width", str(input_json["width"])])
+        
+        if "height" in input_json:
+            cmd_args.extend(["--height", str(input_json["height"])])
+        
+        # Run generation
+        print(f"🚀 Starting generation for job {job_id}...")
+        print(f"📝 Prompt: {prompt}")
+        print(f"⚙️ Parameters: {generation_params}")
+        
+        result = subprocess.run(cmd_args, capture_output=True, text=True, timeout=3600)  # 1 hour timeout
+        
+        if result.returncode == 0:
+            # Generation successful
+            video_path = os.path.join(output_folder, "output.mp4")
+            
+            # Check if video file exists
+            if os.path.exists(video_path):
+                # Update status
+                status_data = {
+                    "job_id": job_id,
+                    "status": "completed",
+                    "completion_time": datetime.datetime.now(zoneinfo.ZoneInfo("US/Pacific")).isoformat(),
+                    "video_path": video_path,
+                    "pbss_sync": False,
+                    "pbss_path": None
+                }
+                
+                # Try to sync to PBSS
+                endpoint, region, secret_key = get_pbss_config()
+                if endpoint and region and secret_key:
+                    try:
+                        # Construct PBSS destination path
+                        date_only = timestamp.split('_')[0]
+                        pbss_dest = f"s3://evaluation_videos/lepton_api/{model_name}/{timestamp}_{job_id}/"
+                        
+                        # Use s5cmd to sync to PBSS
+                        cmd = ["s5cmd", "--profile", "team-cosmos-benchmark", "--endpoint-url", endpoint, "cp", video_path, pbss_dest]
+                        
+                        print(f"🌐 Syncing to PBSS: {pbss_dest}")
+                        print(f"👤 Using profile: team-cosmos-benchmark")
+                        
+                        sync_result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)  # 5 min timeout
+                        
+                        if sync_result.returncode == 0:
+                            status_data["pbss_sync"] = True
+                            status_data["pbss_path"] = f"s3://evaluation_videos/lepton_api/{model_name}/{date_only}_{job_id}/"
+                            print(f"✅ Successfully synced to PBSS: {status_data['pbss_path']}")
+                        else:
+                            print(f"❌ PBSS sync failed: {sync_result.stderr}")
+                            
+                    except Exception as e:
+                        print(f"❌ Error during PBSS sync: {e}")
+                
+                # Save final status
+                status_file = os.path.join(output_folder, "generation_status.json")
+                with open(status_file, "w") as f:
+                    json.dump(status_data, f, indent=2)
+                
+                print(f"✅ Generation completed successfully for job {job_id}")
+                print(f"📁 Video saved to: {video_path}")
+                
+            else:
+                raise FileNotFoundError(f"Expected video file not found: {video_path}")
+                
+        else:
+            # Generation failed
+            error_msg = f"Generation failed with return code {result.returncode}"
+            if result.stderr:
+                error_msg += f": {result.stderr}"
+            
+            status_data = {
+                "job_id": job_id,
+                "status": "error",
+                "error_time": datetime.datetime.now(zoneinfo.ZoneInfo("US/Pacific")).isoformat(),
+                "error": error_msg
+            }
+            
+            status_file = os.path.join(output_folder, "generation_status.json")
+            with open(status_file, "w") as f:
+                json.dump(status_data, f, indent=2)
+            
+            print(f"❌ Generation failed for job {job_id}: {error_msg}")
+            
+    except Exception as e:
+        print(f"❌ Error in async generation: {e}")
+        traceback.print_exc()
 
 
 def create_gradio_interface(checkpoint_dir, output_dir):
@@ -42,9 +235,8 @@ def create_gradio_interface(checkpoint_dir, output_dir):
         Inference function which is called by the gradio app.
 
         - takes the inputs from the UI (prompt, negative prompt, and JSON config)
-        - parses the JSON configuration
-        - runs the Wan2.1 text-to-video generation using generate.py
-        - returns the output video path and/or status message
+        - starts generation asynchronously and returns immediately
+        - generation runs in background and syncs results to PBSS automatically
 
         Args:
             prompt: Text prompt for video generation
@@ -53,7 +245,7 @@ def create_gradio_interface(checkpoint_dir, output_dir):
             api_token: API token for authentication (optional)
 
         Returns:
-            Tuple containing the path to the output video and the status message.
+            Tuple containing None (no immediate result) and status message.
         """
         try:
             # Validate API token if provided
@@ -68,160 +260,38 @@ def create_gradio_interface(checkpoint_dir, output_dir):
             if not input_text:
                 raise ValueError("No configuration provided. Please provide a valid JSON string.")
 
-            # Parse input text as JSON
-            input_json = json.loads(input_text)
-
-            # Create unique output folder with model name
-            timestamp = datetime.datetime.now(zoneinfo.ZoneInfo("US/Pacific")).strftime("%Y-%m-%d_%H-%M-%S")
-            random_generation_id = "".join(random.choices(string.ascii_lowercase, k=4))
+            # Start generation asynchronously
+            print(f"🚀 Starting asynchronous generation...")
+            print(f"📝 Prompt: {prompt}")
             
-            # Create model-specific output directory
-            model_output_dir = os.path.join(output_dir, model_name)
-            output_folder = os.path.join(model_output_dir, f"generation_{timestamp}_{random_generation_id}")
-            os.makedirs(output_folder, exist_ok=True)
-
-            # Set generation parameters
-            generation_params = {
-                "prompt": prompt,
-                "negative_prompt": negative_prompt,
-                "checkpoint_dir": checkpoint_dir,
-                "output_folder": output_folder,
-                "video_save_name": "output",
-                "model_name": model_name,
-                **input_json,  # Merge additional parameters from JSON
-            }
-
-            # Write generation params to file for reference
-            params_path = os.path.join(output_folder, "generation_params.json")
-            with open(params_path, "w") as f:
-                json.dump(generation_params, f, indent=2)
-
-            # Write prompt and negative prompt to files
-            with open(os.path.join(output_folder, "prompt.txt"), "w") as f:
-                f.write(prompt)
-
-            with open(os.path.join(output_folder, "negative_prompt.txt"), "w") as f:
-                f.write(negative_prompt)
-
-            # Build command line arguments for generate.py
-            # Get the Wan2.1 directory path
-            current_dir = os.path.dirname(os.path.abspath(__file__))
-            project_root = os.path.dirname(current_dir)
-            wan2_1_dir = os.path.join(project_root, "Wan2.1")
-            generate_py_path = os.path.join(wan2_1_dir, "generate.py")
-            
-            cmd_args = [
-                "python",
-                generate_py_path,
-                "--task",
-                "t2v-14B",  # Updated for 14B model
-                "--prompt",
-                prompt,
-                "--ckpt_dir",
-                checkpoint_dir,
-                "--save_file",
-                os.path.join(output_folder, "output.mp4"),  # Add .mp4 extension
-                "--offload_model",
-                "False",  # Keep model on GPU for faster generation
-                "--sample_shift",
-                "5.0",  # Default shift parameter
-                "--sample_solver",
-                "unipc",  # Default solver
-            ]
-
-            # Note: generate.py doesn't support --negative_prompt argument
-            # Negative prompts are handled internally by the model using default values
-            # The negative prompt is written to file for reference but not passed to generate.py
-
-            # Add additional parameters from JSON with correct mapping
-            if "frame_num" in input_json:
-                cmd_args.extend(["--frame_num", str(input_json["frame_num"])])
-            elif "num_frames" in input_json:
-                cmd_args.extend(["--frame_num", str(input_json["num_frames"])])
-
-            if "sample_steps" in input_json:
-                cmd_args.extend(["--sample_steps", str(input_json["sample_steps"])])
-            elif "num_inference_steps" in input_json:
-                cmd_args.extend(["--sample_steps", str(input_json["num_inference_steps"])])
-
-            if "sample_guide_scale" in input_json:
-                cmd_args.extend(["--sample_guide_scale", str(input_json["sample_guide_scale"])])
-            elif "guidance_scale" in input_json:
-                cmd_args.extend(["--sample_guide_scale", str(input_json["guidance_scale"])])
-
-            if "base_seed" in input_json:
-                cmd_args.extend(["--base_seed", str(input_json["base_seed"])])
-            elif "seed" in input_json:
-                cmd_args.extend(["--base_seed", str(input_json["seed"])])
-
-            if "width" in input_json and "height" in input_json:
-                cmd_args.extend(["--size", f"{input_json['width']}*{input_json['height']}"])
-
-            # Keep model on GPU for fast generation (no offloading)
-            # cmd_args.extend(["--offload_model", "True", "--t5_cpu"])  # Commented out to use GPU
-
-            # Add GPU optimization flags for faster generation with H100
-            # Note: generate.py doesn't support --device, --batch_size, --num_workers
-            # GPU device is automatically detected by PyTorch
-
-            # Add prompt extension if specified
-            if input_json.get("use_prompt_extend", False):
-                cmd_args.append("--use_prompt_extend")
-
-            print(f"Running Wan2.1 generation with command: {' '.join(cmd_args)}")
-
-            # Run the generation with H100 GPU optimization
-            env = os.environ.copy()
-            env["PYTHONPATH"] = wan2_1_dir
-            env["CUDA_VISIBLE_DEVICES"] = "0"  # Use primary H100 GPU
-            env["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:2048"  # Larger chunks for H100
-            env["CUDA_LAUNCH_BLOCKING"] = "0"  # Non-blocking CUDA operations
-            env["TORCH_CUDNN_V8_API_ENABLED"] = "1"  # Enable cuDNN v8 for H100
-            env["NVIDIA_TF32_OVERRIDE"] = "1"  # Enable TF32 for faster computation
-            env["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:2048,expandable_segments:True"  # Better memory management
-            env["CUDA_DEVICE_MAX_CONNECTIONS"] = "1"  # Reduce GPU memory fragmentation
-
-            result = subprocess.run(
-                cmd_args,
-                stdout=sys.stdout,     
-                stderr=sys.stderr,
+            # Create a thread for generation
+            generation_thread = threading.Thread(
+                target=run_generation_async,
+                args=(prompt, negative_prompt, input_text, api_token, checkpoint_dir, output_dir, model_name)
             )
+            generation_thread.daemon = True
+            generation_thread.start()
+            
+            # Return immediately with status message
+            status_message = f"🚀 Generation started asynchronously!\n"
+            status_message += f"📝 Prompt: {prompt}\n"
+            status_message += f"⏰ Started at: {datetime.datetime.now(zoneinfo.ZoneInfo('US/Pacific')).strftime('%Y-%m-%d %H:%M:%S')}\n"
+            status_message += f"🔄 Generation is running in the background...\n"
+            status_message += f"📁 Results will be saved locally and synced to PBSS automatically\n"
+            
+            # Get PBSS config for status message
+            endpoint, region, secret_key = get_pbss_config()
+            if endpoint and region and secret_key:
+                timestamp = datetime.datetime.now(zoneinfo.ZoneInfo("US/Pacific")).strftime("%Y-%m-%d_%H-%M-%S")
+                status_message += f"🌐 Results will be synced to PBSS at: s3://evaluation_videos/lepton_api/{model_name}/{timestamp.split('_')[0]}_<job_id>/"
+            
+            return None, status_message
 
-            # Always log the output for debugging
-            print(f"generate.py stdout: {result.stdout}")
-            print(f"generate.py stderr: {result.stderr}")
-            print(f"generate.py return code: {result.returncode}")
-
-            if result.returncode != 0:
-                error_msg = f"Generation failed with return code {result.returncode}\n"
-                error_msg += f"stdout: {result.stdout}\n"
-                error_msg += f"stderr: {result.stderr}"
-                return None, error_msg
-
-            # Look for the generated video
-            expected_video_path = os.path.join(output_folder, "output.mp4")  # Updated to match save_file
-
-            # Debug: List all files in output directory
-            print(f"Files in output directory {output_folder}:")
-            if os.path.exists(output_folder):
-                for file in os.listdir(output_folder):
-                    print(f"  - {file}")
-            else:
-                print(f"Output directory {output_folder} does not exist!")
-
-            if os.path.exists(expected_video_path):
-                return expected_video_path, f"Video generated successfully!\nOutput saved to: {output_folder}\nPrompt: {prompt}"
-            else:
-                # Check for other possible video files
-                video_files = [f for f in os.listdir(output_folder) if f.endswith((".mp4", ".avi", ".mov"))]
-                if video_files:
-                    video_path = os.path.join(output_folder, video_files[0])
-                    return video_path, f"Video generated successfully!\nOutput saved to: {output_folder}\nPrompt: {prompt}"
-                else:
-                    return None, f"Generation completed but no video file found in {output_folder}"
-
-        except Exception:
-            return None, f"Error during generation:\n\n{traceback.format_exc()}"
+        except Exception as e:
+            error_msg = f"Error starting generation: {str(e)}"
+            print(f"❌ {error_msg}")
+            traceback.print_exc()
+            return None, f"❌ {error_msg}"
 
     # Define the gradio interface (UI/API) - using gr.Interface to expose API endpoints
     interface = gr.Interface(
@@ -304,26 +374,24 @@ if __name__ == "__main__":
         print(f"  └── gradio_host/")
         sys.exit(1)
 
-    # Check if generate.py exists
     if not os.path.exists(generate_py_path):
         print(f"Error: generate.py not found at {generate_py_path}")
         print("Please ensure the Wan2.1 repository is properly set up.")
         sys.exit(1)
 
-    # Check if checkpoint directory exists
     if not os.path.exists(checkpoint_dir):
-        print(f"Warning: Checkpoint directory not found at {checkpoint_dir}")
-        print("You may need to download the model checkpoints.")
-        print("Please refer to the Wan2.1 documentation for model setup.")
+        print(f"Error: Checkpoint directory not found at {checkpoint_dir}")
+        print("Please ensure the Wan2.1-T2V-14B checkpoints are available.")
+        sys.exit(1)
 
-    # Create output directory if it doesn't exist
-    os.makedirs(save_dir, exist_ok=True)
+    # Create the interface
+    interface = create_gradio_interface(checkpoint_dir, save_dir)
 
-    interface = create_gradio_interface(checkpoint_dir=checkpoint_dir, output_dir=save_dir)
+    # Launch the app
+    print(f"🚀 Launching Wan2.1 14B Gradio app on {server_name}:{server_port}")
     interface.launch(
-        allowed_paths=allowed_paths,
         server_name=server_name,
         server_port=server_port,
         share=False,
-        show_error=True,  # Show detailed errors for debugging
+        allowed_paths=allowed_paths,
     ) 
