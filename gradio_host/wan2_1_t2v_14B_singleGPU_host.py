@@ -106,6 +106,7 @@ def run_generation_async(generation_params: dict, output_folder: str, job_id: st
             os.path.join(output_folder, "output.mp4"),
             "--offload_model",
             "False",
+            "--t5_cpu",  # Move T5 text encoder to CPU to reduce GPU memory usage
             "--sample_shift",
             "5.0",
             "--sample_solver",
@@ -133,11 +134,13 @@ def run_generation_async(generation_params: dict, output_folder: str, job_id: st
         elif "seed" in generation_params:
             cmd_args.extend(["--base_seed", str(generation_params["seed"])])
         
-        if "width" in generation_params:
-            cmd_args.extend(["--width", str(generation_params["width"])])
-        
-        if "height" in generation_params:
-            cmd_args.extend(["--height", str(generation_params["height"])])
+        if "size" in generation_params:
+            # Use the size parameter directly (format: "WIDTH*HEIGHT")
+            cmd_args.extend(["--size", str(generation_params["size"])])
+        elif "width" in generation_params and "height" in generation_params:
+            # Fallback: combine width and height into size parameter
+            size_param = f"{generation_params['width']}*{generation_params['height']}"
+            cmd_args.extend(["--size", size_param])
         
         # Run generation
         print(f"🚀 Starting generation for job {job_id}...")
