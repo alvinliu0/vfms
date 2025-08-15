@@ -114,7 +114,7 @@ def run_generation_async(generation_params: dict, output_folder: str, job_id: st
             "--nproc_per_node=8",  # Use 8 GPUs
             generate_py_path,
             "--task",
-            "t2v-1.3b",  # Fixed: lowercase 'b' for Wan2.1 1.3B model
+            "t2v-1.3B",  # Fixed: uppercase 'B' for Wan2.1 1.3B model
             "--prompt",
             generation_params["prompt"],
             "--ckpt_dir",
