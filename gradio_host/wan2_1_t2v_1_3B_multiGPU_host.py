@@ -123,6 +123,8 @@ def run_generation_async(generation_params: dict, output_folder: str, job_id: st
             "--t5_fsdp",  # Enable FSDP for T5 text encoder
             "--ulysses_size",
             "4",  # Ulysses communication group size (must divide num_heads=12 evenly)
+            "--ring_size",
+            "2",  # Ring communication group size (ulysses_size * ring_size = world_size = 8)
             "--sample_shift",
             "5.0",
             "--sample_solver",
