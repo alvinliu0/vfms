@@ -15,9 +15,9 @@ import random
 import string
 import subprocess
 import sys
+import threading
 import traceback
 import zoneinfo
-import threading
 from typing import Optional
 
 import gradio as gr
@@ -26,7 +26,7 @@ import gradio as gr
 def sync_to_pbss(local_path: str, job_id: str, model_name: str):
     """
     Synchronize generated results to PBSS using s5cmd.
-    
+
     Args:
         local_path: Local path to the generated video
         job_id: Unique job identifier
@@ -37,29 +37,31 @@ def sync_to_pbss(local_path: str, job_id: str, model_name: str):
         endpoint = os.environ.get("TEAM_COSMOS_BENCHMARK_ENDPOINT")
         region = os.environ.get("TEAM_COSMOS_BENCHMARK_REGION")
         secret_key = os.environ.get("XIANL_TEAM_COSMOS_BENCHMARK")
-        
+
         if not all([endpoint, region, secret_key]):
-            print(f"⚠️ Missing PBSS configuration. Endpoint: {endpoint}, Region: {region}, Secret: {'*' * 10 if secret_key else 'None'}")
+            print(
+                f"⚠️ Missing PBSS configuration. Endpoint: {endpoint}, Region: {region}, Secret: {'*' * 10 if secret_key else 'None'}"
+            )
             return False
-        
+
         # Credentials should be set up beforehand using setup_pbss_credentials.py
         # Just use the existing credentials in /root/.aws/
         env = os.environ.copy()
-        
+
         # Construct PBSS destination path
         timestamp = datetime.datetime.now(zoneinfo.ZoneInfo("US/Pacific")).strftime("%Y-%m-%d")
         pbss_dest = f"s3://evaluation_videos/lepton_api/{model_name}/{timestamp}_{job_id}/"
-        
+
         # Run s5cmd sync command with profile and endpoint
         cmd = ["s5cmd", "--profile", "team-cosmos-benchmark", "--endpoint-url", endpoint, "cp", local_path, pbss_dest]
-        
+
         print(f"🔄 Syncing to PBSS: {' '.join(cmd)}")
         print(f"🌐 Using endpoint: {endpoint}")
         print(f"🌍 Using region: {region}")
         print("👤 Using profile: team-cosmos-benchmark")
-        
-        result = subprocess.run(cmd, capture_output=True, text=True, env=env)
-        
+
+        result = subprocess.run(cmd, check=False, capture_output=True, text=True, env=env)
+
         if result.returncode == 0:
             print(f"✅ Successfully synced to PBSS: {pbss_dest}")
             return True
@@ -67,7 +69,7 @@ def sync_to_pbss(local_path: str, job_id: str, model_name: str):
             print(f"❌ Failed to sync to PBSS: {result.stderr}")
             print(f"stdout: {result.stdout}")
             return False
-            
+
     except Exception as e:
         print(f"❌ Error during PBSS sync: {e}")
         return False
@@ -76,7 +78,7 @@ def sync_to_pbss(local_path: str, job_id: str, model_name: str):
 def run_generation_async(generation_params: dict, output_folder: str, job_id: str, model_name: str):
     """
     Run generation in a background thread and sync results to PBSS.
-    
+
     Args:
         generation_params: Generation parameters
         output_folder: Output folder path
@@ -85,13 +87,13 @@ def run_generation_async(generation_params: dict, output_folder: str, job_id: st
     """
     try:
         print(f"🔄 Starting async generation for job {job_id}...")
-        
+
         # Get the Wan2.1 directory path
         current_dir = os.path.dirname(os.path.abspath(__file__))
         project_root = os.path.dirname(current_dir)
         wan2_1_dir = os.path.join(project_root, "Wan2.1")
         generate_py_path = os.path.join(wan2_1_dir, "generate.py")
-        
+
         # Build command line arguments for generate.py
         cmd_args = [
             "python",
@@ -153,11 +155,7 @@ def run_generation_async(generation_params: dict, output_folder: str, job_id: st
         env["CUDA_DEVICE_MAX_CONNECTIONS"] = "1"
 
         result = subprocess.run(
-            cmd_args,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            env=env,
-            text=True
+            cmd_args, check=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env, text=True
         )
 
         print(f"generate.py return code: {result.returncode}")
@@ -169,19 +167,19 @@ def run_generation_async(generation_params: dict, output_folder: str, job_id: st
         if result.returncode == 0:
             # Look for the generated video
             expected_video_path = os.path.join(output_folder, "output.mp4")
-            
+
             if os.path.exists(expected_video_path):
                 print(f"✅ Generation completed successfully for job {job_id}")
-                
+
                 # Sync to PBSS
                 print(f"🔄 Syncing results to PBSS for job {job_id}...")
                 sync_success = sync_to_pbss(expected_video_path, job_id, model_name)
-                
+
                 if sync_success:
                     print(f"✅ Job {job_id} completed and synced to PBSS successfully!")
                 else:
                     print(f"⚠️ Job {job_id} completed but PBSS sync failed")
-                
+
                 # Write completion status
                 status_file = os.path.join(output_folder, "generation_status.json")
                 # Generate timestamp for PBSS path (just the date, not the full timestamp)
@@ -192,12 +190,12 @@ def run_generation_async(generation_params: dict, output_folder: str, job_id: st
                     "completion_time": datetime.datetime.now(zoneinfo.ZoneInfo("US/Pacific")).isoformat(),
                     "video_path": expected_video_path,
                     "pbss_sync": sync_success,
-                    "pbss_path": f"s3://evaluation_videos/lepton_api/{model_name}/{date_only}_{job_id}/"
+                    "pbss_path": f"s3://evaluation_videos/lepton_api/{model_name}/{date_only}_{job_id}/",
                 }
-                
+
                 with open(status_file, "w") as f:
                     json.dump(status_data, f, indent=2)
-                    
+
             else:
                 print(f"❌ Generation failed for job {job_id}: No video file found")
                 # Write failure status
@@ -206,9 +204,9 @@ def run_generation_async(generation_params: dict, output_folder: str, job_id: st
                     "job_id": job_id,
                     "status": "failed",
                     "failure_time": datetime.datetime.now(zoneinfo.ZoneInfo("US/Pacific")).isoformat(),
-                    "error": "No video file generated"
+                    "error": "No video file generated",
                 }
-                
+
                 with open(status_file, "w") as f:
                     json.dump(status_data, f, indent=2)
         else:
@@ -220,12 +218,12 @@ def run_generation_async(generation_params: dict, output_folder: str, job_id: st
                 "status": "failed",
                 "failure_time": datetime.datetime.now(zoneinfo.ZoneInfo("US/Pacific")).isoformat(),
                 "error": f"Generation failed with return code {result.returncode}",
-                "stderr": result.stderr
+                "stderr": result.stderr,
             }
-            
+
             with open(status_file, "w") as f:
                 json.dump(status_data, f, indent=2)
-                
+
     except Exception as e:
         print(f"❌ Error during async generation for job {job_id}: {e}")
         # Write error status
@@ -234,9 +232,9 @@ def run_generation_async(generation_params: dict, output_folder: str, job_id: st
             "job_id": job_id,
             "status": "error",
             "error_time": datetime.datetime.now(zoneinfo.ZoneInfo("US/Pacific")).isoformat(),
-            "error": str(e)
+            "error": str(e),
         }
-        
+
         with open(status_file, "w") as f:
             json.dump(status_data, f, indent=2)
 
@@ -252,9 +250,9 @@ def create_gradio_interface(checkpoint_dir, output_dir):
     Returns:
         Gradio interface
     """
-    
+
     # Define model name for output organization
-    model_name = "wan2.1_t2v_1.3B_singleGPU"
+    model_name = "wan2_1_t2v_1_3B_singleGPU"
 
     def _infer(prompt, negative_prompt, input_text: str, api_token: str = "") -> tuple[Optional[str], Optional[str]]:
         """
@@ -294,7 +292,7 @@ def create_gradio_interface(checkpoint_dir, output_dir):
             timestamp = datetime.datetime.now(zoneinfo.ZoneInfo("US/Pacific")).strftime("%Y-%m-%d_%H-%M-%S")
             random_generation_id = "".join(random.choices(string.ascii_lowercase, k=4))
             job_id = f"{timestamp}_{random_generation_id}"
-            
+
             # Create model-specific output directory
             model_output_dir = os.path.join(output_dir, model_name)
             output_folder = os.path.join(model_output_dir, f"generation_{job_id}")
@@ -331,16 +329,15 @@ def create_gradio_interface(checkpoint_dir, output_dir):
                 "submission_time": datetime.datetime.now(zoneinfo.ZoneInfo("US/Pacific")).isoformat(),
                 "prompt": prompt,
                 "negative_prompt": negative_prompt,
-                "parameters": input_json
+                "parameters": input_json,
             }
-            
+
             with open(status_file, "w") as f:
                 json.dump(initial_status, f, indent=2)
 
             # Start generation in background thread
             generation_thread = threading.Thread(
-                target=run_generation_async,
-                args=(generation_params, output_folder, job_id, model_name)
+                target=run_generation_async, args=(generation_params, output_folder, job_id, model_name)
             )
             generation_thread.daemon = True
             generation_thread.start()
@@ -364,7 +361,9 @@ def create_gradio_interface(checkpoint_dir, output_dir):
     interface = gr.Interface(
         fn=_infer,
         inputs=[
-            gr.Textbox(label="Prompt", lines=3, placeholder="A beautiful sunset over the ocean, cinematic lighting, 4K quality"),
+            gr.Textbox(
+                label="Prompt", lines=3, placeholder="A beautiful sunset over the ocean, cinematic lighting, 4K quality"
+            ),
             gr.Textbox(label="Negative Prompt", lines=2, placeholder="blurry, low quality, distorted, ugly"),
             gr.Textbox(
                 label="Generation Parameters JSON",
@@ -409,12 +408,12 @@ if __name__ == "__main__":
     # Get current directory and construct paths relative to it
     current_dir = os.path.dirname(os.path.abspath(__file__))
     project_root = os.path.dirname(current_dir)  # Go up one level to project root
-    
+
     # Wan2.1 paths - use relative paths from project root
     wan2_1_dir = os.path.join(project_root, "Wan2.1")
     generate_py_path = os.path.join(wan2_1_dir, "generate.py")
     checkpoint_dir = os.path.join(wan2_1_dir, "Wan2.1-T2V-1.3B")
-    
+
     # Environment variables with fallbacks
     save_dir = os.environ.get("GRADIO_SAVE_DIR", "/mnt/vfms/gradio_output")
     allowed_paths = os.environ.get("GRADIO_ALLOWED_PATHS", f"{project_root},{save_dir}").split(",")

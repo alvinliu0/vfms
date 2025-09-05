@@ -1,17 +1,3 @@
-# -----------------------------------------------------------------------------
-# Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES.
-# All rights reserved.
-#
-# This codebase constitutes NVIDIA proprietary technology and is strictly
-# confidential. Any unauthorized reproduction, distribution, or disclosure
-# of this code, in whole or in part, outside NVIDIA is strictly prohibited
-# without prior written consent.
-#
-# For inquiries regarding the use of this code in other NVIDIA proprietary
-# projects, please contact the Deep Imagination Research Team at
-# dir@exchange.nvidia.com.
-# -----------------------------------------------------------------------------
-
 """
 Gradio host for Wan2.1 text-to-video generation endpoint (1.3B model with multi-GPU).
 
@@ -239,7 +225,7 @@ def create_gradio_interface(checkpoint_dir, output_dir):
     """
 
     # Define model name for output organization
-    model_name = "wan2_1_t2v_1_3B_multiGPU"
+    model_name = "wan2_1_t2v_1_3B_multiGPU"  # Fixed naming convention to match PBSS format
 
     # Capture checkpoint_dir in closure for _infer function to access
     checkpoint_dir_closure = checkpoint_dir
