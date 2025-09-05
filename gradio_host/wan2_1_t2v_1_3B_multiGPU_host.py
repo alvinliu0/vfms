@@ -31,11 +31,9 @@ import os
 import subprocess
 import sys
 import threading
-import time
 import traceback
 import zoneinfo
-from pathlib import Path
-from typing import Dict, Optional, Tuple
+from typing import Optional
 
 import gradio as gr
 
@@ -73,7 +71,7 @@ def sync_to_pbss(local_path: str, job_id: str, model_name: str) -> bool:
         print(f"🌍 Using region: {region}")
         print("👤 Using profile: team-cosmos-benchmark")
 
-        result = subprocess.run(cmd, capture_output=True, text=True, env=env)
+        result = subprocess.run(cmd, check=False, capture_output=True, text=True, env=env)
 
         if result.returncode == 0:
             print(f"✅ Successfully synced to PBSS: {pbss_dest}")
@@ -124,7 +122,7 @@ def run_generation_async(generation_params: dict, output_folder: str, job_id: st
             "--dit_fsdp",  # Enable FSDP for DIT model
             "--t5_fsdp",  # Enable FSDP for T5 text encoder
             "--ulysses_size",
-            "8",  # Ulysses communication group size
+            "4",  # Ulysses communication group size (must divide num_heads=12 evenly)
             "--sample_shift",
             "5.0",
             "--sample_solver",
@@ -165,7 +163,7 @@ def run_generation_async(generation_params: dict, output_folder: str, job_id: st
         print(f"📝 Prompt: {generation_params['prompt']}")
         print(f"⚙️ Parameters: {generation_params}")
 
-        result = subprocess.run(cmd_args, capture_output=True, text=True, timeout=3600)  # 1 hour timeout
+        result = subprocess.run(cmd_args, check=False, capture_output=True, text=True, timeout=3600)  # 1 hour timeout
 
         if result.returncode == 0:
             # Generation successful
@@ -258,7 +256,7 @@ def create_gradio_interface(checkpoint_dir, output_dir):
             Tuple of (video_path, status_message)
         """
         try:
-            print(f"🎬 Starting Wan2.1 1.3B Multi-GPU generation...")
+            print("🎬 Starting Wan2.1 1.3B Multi-GPU generation...")
             print(f"📝 Prompt: {prompt}")
             print(f"📝 Negative Prompt: {negative_prompt}")
 
@@ -274,6 +272,7 @@ def create_gradio_interface(checkpoint_dir, output_dir):
 
             # Generate unique job ID
             import uuid
+
             job_id = str(uuid.uuid4())
             timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
@@ -339,7 +338,9 @@ def create_gradio_interface(checkpoint_dir, output_dir):
         fn=_infer,
         inputs=[
             gr.Textbox(
-                label="Prompt", lines=3, placeholder="Two anthropomorphic cats in comfy boxing gear and bright gloves fight intensely on a spotlighted stage."
+                label="Prompt",
+                lines=3,
+                placeholder="Two anthropomorphic cats in comfy boxing gear and bright gloves fight intensely on a spotlighted stage.",
             ),
             gr.Textbox(label="Negative Prompt", lines=2, placeholder="blurry, low quality, distorted, ugly"),
             gr.Textbox(
@@ -439,4 +440,4 @@ if __name__ == "__main__":
         server_port=server_port,
         share=False,
         allowed_paths=allowed_paths,
-    ) 
+    )
