@@ -1,3 +1,17 @@
+# -----------------------------------------------------------------------------
+# Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES.
+# All rights reserved.
+#
+# This codebase constitutes NVIDIA proprietary technology and is strictly
+# confidential. Any unauthorized reproduction, distribution, or disclosure
+# of this code, in whole or in part, outside NVIDIA is strictly prohibited
+# without prior written consent.
+#
+# For inquiries regarding the use of this code in other NVIDIA proprietary
+# projects, please contact the Deep Imagination Research Team at
+# dir@exchange.nvidia.com.
+# -----------------------------------------------------------------------------
+
 """
 Gradio host for Wan2.1 text-to-video generation endpoint (1.3B model with multi-GPU).
 
@@ -37,9 +51,16 @@ def sync_to_pbss(local_path: str, job_id: str, model_name: str) -> bool:
         True if sync successful, False otherwise
     """
     try:
-        # PBSS configuration
-        endpoint = os.environ.get("PBSS_ENDPOINT", "https://pbss.nvda-ai.com")
-        region = os.environ.get("PBSS_REGION", "us-east-1")
+        # Get PBSS configuration from environment variables
+        endpoint = os.environ.get("TEAM_COSMOS_BENCHMARK_ENDPOINT")
+        region = os.environ.get("TEAM_COSMOS_BENCHMARK_REGION")
+        secret_key = os.environ.get("XIANL_TEAM_COSMOS_BENCHMARK")
+
+        if not all([endpoint, region, secret_key]):
+            print(
+                f"⚠️ Missing PBSS configuration. Endpoint: {endpoint}, Region: {region}, Secret: {'*' * 10 if secret_key else 'None'}"
+            )
+            return False
 
         # Credentials should be set up beforehand using setup_pbss_credentials.py
         # Just use the existing credentials in /root/.aws/
