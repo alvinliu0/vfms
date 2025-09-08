@@ -28,6 +28,8 @@ Usage:
 import datetime
 import json
 import os
+import random
+import string
 import subprocess
 import sys
 import threading
@@ -280,10 +282,9 @@ def create_gradio_interface(checkpoint_dir, output_dir):
             generation_params["negative_prompt"] = negative_prompt
 
             # Generate unique job ID
-            import uuid
-
-            job_id = str(uuid.uuid4())
-            timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+            timestamp = datetime.datetime.now(zoneinfo.ZoneInfo("US/Pacific")).strftime("%Y-%m-%d_%H-%M-%S")
+            random_generation_id = "".join(random.choices(string.ascii_lowercase, k=4))
+            job_id = f"{timestamp}_{random_generation_id}"
 
             # Create output directory structure
             model_output_dir = os.path.join(output_dir, model_name)
